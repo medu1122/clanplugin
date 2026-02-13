@@ -1,0 +1,52 @@
+# ClanCore Configuration
+
+# Clan Points System
+clan-points:
+  # Số điểm clan point cần để upgrade lên level tiếp theo
+  upgrade-costs:
+    1: 1000    # Level 1 -> Level 2: 1000 points
+    2: 2000    # Level 2 -> Level 3: 2000 points
+    3: 3000    # Level 3 -> Level 4: 3000 points
+    4: 5000    # Level 4 -> Level 5: 5000 points
+
+  # Items có thể sell để lấy clan point
+  sellable-items:
+    # Format: MATERIAL_NAME:points
+    DIAMOND: 10
+    GOLD_INGOT: 5
+    IRON_INGOT: 3
+    EMERALD: 15
+    NETHERITE_INGOT: 50
+    COAL: 1
+    REDSTONE: 2
+    LAPIS_LAZULI: 2
+    QUARTZ: 3
+    GLOWSTONE_DUST: 2
+
+# Clan Level System
+clan-levels:
+  # Max level
+  max-level: 5
+  
+  # Level configurations
+  levels:
+    1:
+      max-members: 15
+      speed-buff: 10      # % speed increase
+      health-buff: 0      # % health increase
+    2:
+      max-members: 25
+      speed-buff: 10      # Additional % speed (total: 20%)
+      health-buff: 15     # Additional % health (total: 15%)
+    3:
+      max-members: 35
+      speed-buff: 10      # Additional % speed (total: 30%)
+      health-buff: 15     # Additional % health (total: 30%)
+    4:
+      max-members: 45
+      speed-buff: 15      # Additional % speed (total: 45%)
+      health-buff: 15     # Additional % health (total: 45%)
+    5:
+      max-members: 50
+      speed-buff: 15      # Additional % speed (total: 60%)
+      health-buff: 15     # Additional % health (total: 60%)

@@ -1,4 +1,15 @@
 name: ClanCore
 version: '1.0-SNAPSHOT'
-main: me.skibidi.clancore.ClanPlugin
+main: me.skibidi.clancore.ClanCorePlugin
 api-version: '1.21'
+commands:
+  clan:
+    description: Clan main command
+  team:
+    description: Team main command
+  clanadmin:
+    description: Clan admin commands
+    permission: clancore.admin
+  teamadmin:
+    description: Team admin commands
+    permission: clancore.admin

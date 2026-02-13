@@ -1,0 +1,283 @@
+package me.skibidi.clancore.listeners;
+
+import me.skibidi.clancore.clan.ClanManager;
+import me.skibidi.clancore.clan.ClanPointManager;
+import me.skibidi.clancore.clan.model.Clan;
+import me.skibidi.clancore.config.ConfigManager;
+import me.skibidi.clancore.gui.ClanInfoGUI;
+import me.skibidi.clancore.gui.ClanUpgradeGUI;
+import me.skibidi.clancore.gui.SellItemsGUI;
+import me.skibidi.clancore.gui.TeamInfoGUI;
+import me.skibidi.clancore.team.TeamManager;
+import me.skibidi.clancore.team.model.Team;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+public class GUIListener implements Listener {
+
+    private final ClanManager clanManager;
+    private final TeamManager teamManager;
+    private final ClanPointManager pointManager;
+    private final ConfigManager configManager;
+    private final Plugin plugin;
+    private final Map<UUID, Integer> clanInfoPages = new HashMap<>();
+    private final Map<UUID, Integer> teamInfoPages = new HashMap<>();
+
+    public GUIListener(ClanManager clanManager, TeamManager teamManager, ClanPointManager pointManager, ConfigManager configManager, Plugin plugin) {
+        this.clanManager = clanManager;
+        this.teamManager = teamManager;
+        this.pointManager = pointManager;
+        this.configManager = configManager;
+        this.plugin = plugin;
+    }
+
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        String title = event.getView().getTitle();
+        ItemStack clicked = event.getCurrentItem();
+
+        // Clan Info GUI - cancel all clicks including empty slots
+        if (title.startsWith("§6Clan: §e")) {
+            event.setCancelled(true);
+            
+            // Early return if clicking empty slot (no action needed)
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            // Close button check (outside ARROW check since it uses BARRIER)
+            if (event.getSlot() == 49 && clicked.getType() == Material.BARRIER) {
+                player.closeInventory();
+                return;
+            }
+
+            if (clicked.getType() == Material.ARROW) {
+                Clan clan = clanManager.getClan(player);
+                if (clan == null) {
+                    player.closeInventory();
+                    return;
+                }
+
+                int currentPage = clanInfoPages.getOrDefault(player.getUniqueId(), 0);
+                if (event.getSlot() == 45) { // Back
+                    if (currentPage > 0) {
+                        clanInfoPages.put(player.getUniqueId(), currentPage - 1);
+                        ClanInfoGUI.open(player, clan, currentPage - 1);
+                    }
+                } else if (event.getSlot() == 53) { // Next
+                    int totalPages = (int) Math.ceil((double) clan.getMembers().size() / 28.0);
+                    if (currentPage < totalPages - 1) {
+                        clanInfoPages.put(player.getUniqueId(), currentPage + 1);
+                        ClanInfoGUI.open(player, clan, currentPage + 1);
+                    }
+                }
+            }
+        }
+
+        // Team Info GUI - cancel all clicks including empty slots
+        if (title.startsWith("§bTeam Info §7")) {
+            event.setCancelled(true);
+            
+            // Early return if clicking empty slot (no action needed)
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            // Close button check (outside ARROW check since it uses BARRIER)
+            if (event.getSlot() == 49 && clicked.getType() == Material.BARRIER) {
+                player.closeInventory();
+                return;
+            }
+
+            if (clicked.getType() == Material.ARROW) {
+                Team team = teamManager.getTeam(player);
+                if (team == null) {
+                    player.closeInventory();
+                    return;
+                }
+
+                int currentPage = teamInfoPages.getOrDefault(player.getUniqueId(), 0);
+                if (event.getSlot() == 45) { // Back
+                    if (currentPage > 0) {
+                        teamInfoPages.put(player.getUniqueId(), currentPage - 1);
+                        TeamInfoGUI.open(player, team, currentPage - 1);
+                    }
+                } else if (event.getSlot() == 53) { // Next
+                    int totalPages = (int) Math.ceil((double) team.getMembers().size() / 28.0);
+                    if (currentPage < totalPages - 1) {
+                        teamInfoPages.put(player.getUniqueId(), currentPage + 1);
+                        TeamInfoGUI.open(player, team, currentPage + 1);
+                    }
+                }
+            }
+        }
+
+        // Clan Upgrade GUI - cancel all clicks including empty slots
+        if (title.equals("§6Nâng Cấp Clan")) {
+            event.setCancelled(true);
+            
+            Clan clan = clanManager.getClan(player);
+            if (clan == null) {
+                player.closeInventory();
+                return;
+            }
+            
+            // Early return if clicking empty slot (no action needed)
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            if (event.getSlot() == 22) { // Sell items button
+                event.setCancelled(true);
+                SellItemsGUI.open(player, clan, configManager, pointManager);
+                return;
+            }
+
+            if (event.getSlot() == 31) { // Upgrade button
+                event.setCancelled(true);
+                if (pointManager.upgradeClan(player)) {
+                    // Refresh GUI
+                    ClanUpgradeGUI.open(player, clan, configManager, pointManager);
+                }
+                return;
+            }
+
+            if (event.getSlot() == 49) { // Close
+                event.setCancelled(true);
+                player.closeInventory();
+                return;
+            }
+
+            // Block other slots
+            event.setCancelled(true);
+        }
+
+        // Sell Items GUI - allow item placement in sell slots
+        if (title.equals("§6Bán Vật Phẩm")) {
+            Clan clan = clanManager.getClan(player);
+            if (clan == null) {
+                event.setCancelled(true);
+                player.closeInventory();
+                return;
+            }
+
+            // Allow placing items in sell slots (don't cancel, allow normal interaction)
+            if (SellItemsGUI.isSellSlot(event.getSlot())) {
+                // Allow normal inventory interaction
+                // Update info panel when items change
+                org.bukkit.Bukkit.getScheduler().runTaskLater(
+                        plugin,
+                        () -> {
+                            if (player.getOpenInventory().getTitle().equals("§6Bán Vật Phẩm")) {
+                                SellItemsGUI.updateInfoPanel(
+                                        player.getOpenInventory().getTopInventory(),
+                                        clan,
+                                        configManager,
+                                        pointManager
+                                );
+                            }
+                        },
+                        1L
+                );
+                return; // Don't cancel - allow item placement
+            }
+            
+            // For non-sell slots, cancel clicks (including empty slots)
+            event.setCancelled(true);
+            
+            // Early return if clicking empty slot in non-sell slots
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            if (event.getSlot() == 40) { // Sell all button
+                event.setCancelled(true);
+                org.bukkit.inventory.Inventory inv = event.getInventory();
+                int totalPoints = 0;
+                java.util.List<ItemStack> itemsToRemove = new java.util.ArrayList<>();
+
+                for (int slot : SellItemsGUI.getSellSlots()) {
+                    ItemStack item = inv.getItem(slot);
+                    if (item != null && item.getType() != Material.AIR) {
+                        Material material = item.getType();
+                        if (configManager.isSellable(material)) {
+                            int pricePerItem = configManager.getSellPrice(material);
+                            int amount = item.getAmount();
+                            int itemPoints = pricePerItem * amount;
+                            totalPoints += itemPoints;
+                            itemsToRemove.add(item);
+                        }
+                    }
+                }
+
+                if (totalPoints > 0) {
+                    // Add points to clan FIRST (before removing items)
+                    clan.addClanPoints(totalPoints);
+                    
+                    // Save to database BEFORE removing items
+                    if (clanManager.updateClanStats(clan)) {
+                        // Database save successful - now remove items
+                        for (int slot : SellItemsGUI.getSellSlots()) {
+                            ItemStack item = inv.getItem(slot);
+                            if (item != null && item.getType() != Material.AIR) {
+                                Material material = item.getType();
+                                if (configManager.isSellable(material)) {
+                                    inv.setItem(slot, null);
+                                }
+                            }
+                        }
+                        
+                        player.sendMessage("§aĐã bán vật phẩm và nhận §e" + totalPoints + " §ađiểm clan!");
+                    } else {
+                        // Rollback: remove points if DB save failed
+                        // Check return value to ensure rollback succeeded
+                        if (!clan.removeClanPoints(totalPoints)) {
+                            // Rollback failed - points may have been spent by another operation
+                            System.err.println("[ClanCore] CRITICAL: Failed to rollback clan points in Sell Items GUI for clan: " + 
+                                    clan.getName() + ". Attempted to remove " + totalPoints + " points. " +
+                                    "Points may be in inconsistent state. Player: " + player.getName());
+                            player.sendMessage("§c§lLỖI NGHIÊM TRỌNG: Không thể hoàn tác điểm clan! Vui lòng liên hệ admin ngay lập tức!");
+                        } else {
+                            player.sendMessage("§cLỗi khi lưu điểm clan! Vui lòng thử lại sau.");
+                        }
+                        return; // Don't remove items or update GUI if save failed
+                    }
+                    
+                    // Update info panel
+                    SellItemsGUI.updateInfoPanel(inv, clan, configManager, pointManager);
+                } else {
+                    player.sendMessage("§cKhông có vật phẩm nào để bán!");
+                }
+                return;
+            }
+
+            if (event.getSlot() == 45) { // Back button
+                event.setCancelled(true);
+                ClanUpgradeGUI.open(player, clan, configManager, pointManager);
+                return;
+            }
+
+            if (event.getSlot() == 49) { // Close
+                event.setCancelled(true);
+                player.closeInventory();
+                return;
+            }
+
+            // Block other slots
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClose(InventoryCloseEvent event) {
+        if (event.getPlayer() instanceof Player player) {
+            UUID uuid = player.getUniqueId();
+            clanInfoPages.remove(uuid);
+            teamInfoPages.remove(uuid);
+        }
+    }
+}

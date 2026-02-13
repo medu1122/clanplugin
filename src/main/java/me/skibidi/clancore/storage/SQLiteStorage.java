@@ -1,6 +1,8 @@
 package me.skibidi.clancore.storage;
 
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -24,7 +26,8 @@ public class SQLiteStorage {
                     name TEXT NOT NULL UNIQUE,
                     owner TEXT NOT NULL,
                     level INTEGER DEFAULT 1,
-                    contribution INTEGER DEFAULT 0
+                    contribution INTEGER DEFAULT 0,
+                    clan_points INTEGER DEFAULT 0
                 );
             """);
 
@@ -38,6 +41,33 @@ public class SQLiteStorage {
                     FOREIGN KEY (clan_id) REFERENCES clans(id) ON DELETE CASCADE
                 );
             """);
+            
+            // Migrate existing databases: add clan_points column if it doesn't exist
+            migrateClanPointsColumn(connection);
+        }
+    }
+    
+    /**
+     * Migrate existing databases by adding clan_points column if it doesn't exist.
+     * This handles upgrades from previous versions that didn't have this column.
+     */
+    private void migrateClanPointsColumn(Connection connection) throws SQLException {
+        try {
+            // Check if clan_points column exists
+            DatabaseMetaData metaData = connection.getMetaData();
+            try (ResultSet columns = metaData.getColumns(null, null, "clans", "clan_points")) {
+                if (!columns.next()) {
+                    // Column doesn't exist, add it
+                    try (Statement stmt = connection.createStatement()) {
+                        stmt.executeUpdate("ALTER TABLE clans ADD COLUMN clan_points INTEGER DEFAULT 0");
+                        System.out.println("[ClanCore] Migrated database: Added clan_points column to clans table.");
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            // If migration fails, log error but don't crash - plugin might still work
+            System.err.println("[ClanCore] WARNING: Failed to migrate clan_points column: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
