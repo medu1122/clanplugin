@@ -267,8 +267,10 @@ public class ClanManager {
             try {
                 memberRepository.addMember(clan.getName(), uuid, "MEMBER");
                 
-                // Check capacity again RIGHT BEFORE adding to memory (final safety check)
-                if (!clan.canAddMember()) {
+                // Check capacity RIGHT BEFORE adding to memory (final safety check)
+                // Note: Member is already in DB, so we check if adding to memory would exceed capacity
+                // We check: current_members + 1 > maxSlots, which is equivalent to: current_members >= maxSlots
+                if (clan.getMembers().size() >= clan.getMaxSlots()) {
                     // Capacity was exceeded between DB save and now - rollback
                     try {
                         memberRepository.removeMember(clan.getName(), uuid);
@@ -361,8 +363,10 @@ public class ClanManager {
         try {
             memberRepository.addMember(clan.getName(), requester, "MEMBER");
             
-            // Check capacity again RIGHT BEFORE adding to memory (final safety check)
-            if (!clan.canAddMember()) {
+            // Check capacity RIGHT BEFORE adding to memory (final safety check)
+            // Note: Member is already in DB, so we check if adding to memory would exceed capacity
+            // We check: current_members + 1 > maxSlots, which is equivalent to: current_members >= maxSlots
+            if (clan.getMembers().size() >= clan.getMaxSlots()) {
                 // Capacity was exceeded between DB save and now - rollback
                 try {
                     memberRepository.removeMember(clan.getName(), requester);
