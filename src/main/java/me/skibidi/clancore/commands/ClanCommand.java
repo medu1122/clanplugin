@@ -8,6 +8,7 @@ import me.skibidi.clancore.clan.model.Clan;
 import me.skibidi.clancore.config.ConfigManager;
 import me.skibidi.clancore.esp.EspManager;
 import me.skibidi.clancore.gui.ClanInfoGUI;
+import me.skibidi.clancore.gui.ClanListGUI;
 import me.skibidi.clancore.gui.ClanUpgradeGUI;
 import me.skibidi.clancore.war.WarManager;
 import org.bukkit.Bukkit;
@@ -380,46 +381,8 @@ public class ClanCommand implements CommandExecutor {
     }
 
     private void handleList(Player player) {
-        java.util.Collection<Clan> allClans = clanManager.getAllClans();
-
-        if (allClans.isEmpty()) {
-            player.sendMessage("§cKhông có clan nào trong server.");
-            return;
-        }
-
-        player.sendMessage("§6=== Danh Sách Clans ===");
-        int index = 1;
-        for (Clan clan : allClans) {
-            // Đếm số member online
-            int onlineCount = 0;
-            int totalMembers = clan.getMembers().size();
-            
-            // Create a copy to avoid ConcurrentModificationException
-            for (UUID memberUuid : new java.util.HashSet<>(clan.getMembers())) {
-                Player member = Bukkit.getPlayer(memberUuid);
-                if (member != null && member.isOnline()) {
-                    onlineCount++;
-                }
-            }
-
-            // Lấy leader info
-            Player leaderPlayer = Bukkit.getPlayer(clan.getOwner());
-            String leaderName;
-            if (leaderPlayer != null && leaderPlayer.isOnline()) {
-                leaderName = "§a" + leaderPlayer.getName() + " §7(Online)";
-            } else {
-                org.bukkit.OfflinePlayer offlineLeader = Bukkit.getOfflinePlayer(clan.getOwner());
-                String offlineName = offlineLeader.getName();
-                if (offlineName == null) {
-                    offlineName = "Unknown (" + clan.getOwner().toString().substring(0, 8) + "...)";
-                }
-                leaderName = "§c" + offlineName + " §7(Offline)";
-            }
-
-            player.sendMessage("§e" + index + ". §6" + clan.getName() + " §7- Leader: " + leaderName);
-            player.sendMessage("   §7Members: §e" + totalMembers + "/" + clan.getMaxSlots());
-            index++;
-        }
+        // Mở GUI thay vì hiển thị trong chat
+        ClanListGUI.open(player, clanManager, 0);
     }
 
     private void handleTransfer(Player player, String[] args) {

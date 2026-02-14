@@ -5,9 +5,11 @@ import me.skibidi.clancore.clan.ClanPointManager;
 import me.skibidi.clancore.clan.model.Clan;
 import me.skibidi.clancore.config.ConfigManager;
 import me.skibidi.clancore.gui.ClanInfoGUI;
+import me.skibidi.clancore.gui.ClanListGUI;
 import me.skibidi.clancore.gui.ClanUpgradeGUI;
 import me.skibidi.clancore.gui.SellItemsGUI;
 import me.skibidi.clancore.gui.TeamInfoGUI;
+import me.skibidi.clancore.gui.TeamListGUI;
 import me.skibidi.clancore.team.TeamManager;
 import me.skibidi.clancore.team.model.Team;
 import org.bukkit.Material;
@@ -32,6 +34,8 @@ public class GUIListener implements Listener {
     private final Plugin plugin;
     private final Map<UUID, Integer> clanInfoPages = new HashMap<>();
     private final Map<UUID, Integer> teamInfoPages = new HashMap<>();
+    private final Map<UUID, Integer> clanListPages = new HashMap<>();
+    private final Map<UUID, Integer> teamListPages = new HashMap<>();
 
     public GUIListener(ClanManager clanManager, TeamManager teamManager, ClanPointManager pointManager, ConfigManager configManager, Plugin plugin) {
         this.clanManager = clanManager;
@@ -270,6 +274,109 @@ public class GUIListener implements Listener {
             // Block other slots
             event.setCancelled(true);
         }
+
+        // Clan List GUI
+        if (title.startsWith("§6Danh Sách Clans §7")) {
+            event.setCancelled(true);
+            
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            // Close button
+            if (event.getSlot() == 49 && clicked.getType() == Material.BARRIER) {
+                player.closeInventory();
+                return;
+            }
+
+            // Pagination
+            if (clicked.getType() == Material.ARROW) {
+                int currentPage = clanListPages.getOrDefault(player.getUniqueId(), 0);
+                if (event.getSlot() == 45) { // Back
+                    if (currentPage > 0) {
+                        clanListPages.put(player.getUniqueId(), currentPage - 1);
+                        ClanListGUI.open(player, clanManager, currentPage - 1);
+                    }
+                } else if (event.getSlot() == 53) { // Next
+                    int totalClans = clanManager.getAllClans().size();
+                    int totalPages = (int) Math.ceil((double) totalClans / 28.0);
+                    if (currentPage < totalPages - 1) {
+                        clanListPages.put(player.getUniqueId(), currentPage + 1);
+                        ClanListGUI.open(player, clanManager, currentPage + 1);
+                    }
+                }
+                return;
+            }
+
+            // Click vào clan để xem chi tiết
+            if (clicked.getType().name().contains("BANNER") && clicked.hasItemMeta()) {
+                String clanName = clicked.getItemMeta().getDisplayName().replace("§6", "");
+                Clan clan = clanManager.getClan(clanName);
+                if (clan != null) {
+                    ClanInfoGUI.open(player, clan, 0);
+                }
+            }
+        }
+
+        // Team List GUI
+        if (title.startsWith("§bDanh Sách Teams §7")) {
+            event.setCancelled(true);
+            
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            // Close button
+            if (event.getSlot() == 49 && clicked.getType() == Material.BARRIER) {
+                player.closeInventory();
+                return;
+            }
+
+            // Pagination
+            if (clicked.getType() == Material.ARROW) {
+                int currentPage = teamListPages.getOrDefault(player.getUniqueId(), 0);
+                if (event.getSlot() == 45) { // Back
+                    if (currentPage > 0) {
+                        teamListPages.put(player.getUniqueId(), currentPage - 1);
+                        TeamListGUI.open(player, teamManager, currentPage - 1);
+                    }
+                } else if (event.getSlot() == 53) { // Next
+                    // Tính tổng số active teams
+                    java.util.Collection<Team> allTeams = teamManager.getAllTeams();
+                    int activeCount = 0;
+                    for (Team team : allTeams) {
+                        boolean hasOnline = false;
+                        for (UUID memberUuid : new java.util.HashSet<>(team.getMembers())) {
+                            Player member = org.bukkit.Bukkit.getPlayer(memberUuid);
+                            if (member != null && member.isOnline()) {
+                                hasOnline = true;
+                                break;
+                            }
+                        }
+                        if (hasOnline) activeCount++;
+                    }
+                    int totalPages = (int) Math.ceil((double) activeCount / 28.0);
+                    if (currentPage < totalPages - 1) {
+                        teamListPages.put(player.getUniqueId(), currentPage + 1);
+                        TeamListGUI.open(player, teamManager, currentPage + 1);
+                    }
+                }
+                return;
+            }
+
+            // Click vào team để xem chi tiết
+            if (clicked.getType() == Material.PLAYER_HEAD && clicked.hasItemMeta()) {
+                // Lấy leader name từ display name
+                String displayName = clicked.getItemMeta().getDisplayName();
+                if (displayName.contains("Team: §e")) {
+                    String leaderName = displayName.replace("§bTeam: §e", "");
+                    // Tìm team theo leader name
+                    for (Team team : teamManager.getAllTeams()) {
+                        org.bukkit.OfflinePlayer leader = org.bukkit.Bukkit.getOfflinePlayer(team.getLeader());
+                        if (leader.getName() != null && leader.getName().equals(leaderName)) {
+                            TeamInfoGUI.open(player, team, 0);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @EventHandler
@@ -278,6 +385,8 @@ public class GUIListener implements Listener {
             UUID uuid = player.getUniqueId();
             clanInfoPages.remove(uuid);
             teamInfoPages.remove(uuid);
+            clanListPages.remove(uuid);
+            teamListPages.remove(uuid);
         }
     }
 }

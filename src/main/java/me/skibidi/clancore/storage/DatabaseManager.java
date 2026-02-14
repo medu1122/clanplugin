@@ -16,7 +16,16 @@ public class DatabaseManager {
         this.plugin = plugin;
     }
 
-    public void connect() throws SQLException {
+    public synchronized void connect() throws SQLException {
+        // Đóng connection cũ nếu có
+        if (connection != null && !connection.isClosed()) {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                // Ignore - đang cố reconnect
+            }
+        }
+        
         if (!plugin.getDataFolder().exists()) {
             plugin.getDataFolder().mkdirs();
         }
@@ -27,9 +36,10 @@ public class DatabaseManager {
         plugin.getLogger().info("SQLite connected successfully.");
     }
 
-    public Connection getConnection() {
-        if (connection == null) {
-            throw new IllegalStateException("Database not connected.");
+    public synchronized Connection getConnection() throws SQLException {
+        // Kiểm tra và reconnect nếu connection bị đóng
+        if (connection == null || connection.isClosed()) {
+            connect();
         }
         return connection;
     }

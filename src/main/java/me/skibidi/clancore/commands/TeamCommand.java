@@ -3,6 +3,7 @@ package me.skibidi.clancore.commands;
 import me.skibidi.clancore.chat.TeamChatManager;
 import me.skibidi.clancore.esp.EspManager;
 import me.skibidi.clancore.gui.TeamInfoGUI;
+import me.skibidi.clancore.gui.TeamListGUI;
 import me.skibidi.clancore.team.TeamManager;
 import me.skibidi.clancore.team.model.Team;
 import org.bukkit.Bukkit;
@@ -225,68 +226,8 @@ public class TeamCommand implements CommandExecutor {
     }
 
     private void handleList(Player player) {
-        java.util.Collection<Team> allTeams = teamManager.getAllTeams();
-        
-        // Lọc chỉ các team có ít nhất 1 member online
-        java.util.List<Team> activeTeams = new java.util.ArrayList<>();
-        for (Team team : allTeams) {
-            boolean hasOnlineMember = false;
-            // Create a copy to avoid ConcurrentModificationException
-            for (java.util.UUID memberUuid : new java.util.HashSet<>(team.getMembers())) {
-                Player member = Bukkit.getPlayer(memberUuid);
-                if (member != null && member.isOnline()) {
-                    hasOnlineMember = true;
-                    break;
-                }
-            }
-            if (hasOnlineMember) {
-                activeTeams.add(team);
-            }
-        }
-
-        if (activeTeams.isEmpty()) {
-            player.sendMessage("§cKhông có team nào đang hoạt động.");
-            return;
-        }
-
-        player.sendMessage("§6=== Danh Sách Teams ===");
-        int index = 1;
-        for (Team team : activeTeams) {
-            // Đếm số member online
-            int onlineCount = 0;
-            java.util.List<String> onlineMembers = new java.util.ArrayList<>();
-            
-            // Create a copy to avoid ConcurrentModificationException
-            for (java.util.UUID memberUuid : new java.util.HashSet<>(team.getMembers())) {
-                Player member = Bukkit.getPlayer(memberUuid);
-                if (member != null && member.isOnline()) {
-                    onlineCount++;
-                    onlineMembers.add(member.getName());
-                }
-            }
-
-            if (onlineCount == 0) {
-                continue; // Bỏ qua team không có member online
-            }
-
-            // Lấy leader name
-            Player leaderPlayer = Bukkit.getPlayer(team.getLeader());
-            String leaderName;
-            if (leaderPlayer != null && leaderPlayer.isOnline()) {
-                leaderName = "§a" + leaderPlayer.getName();
-            } else {
-                org.bukkit.OfflinePlayer offlineLeader = Bukkit.getOfflinePlayer(team.getLeader());
-                String offlineName = offlineLeader.getName();
-                if (offlineName == null) {
-                    offlineName = "Unknown (" + team.getLeader().toString().substring(0, 8) + "...)";
-                }
-                leaderName = "§c" + offlineName + " (Offline)";
-            }
-
-            player.sendMessage("§e" + index + ". §7Leader: " + leaderName);
-            player.sendMessage("   §7Members online (§a" + onlineCount + "§7): §f" + String.join("§7, §f", onlineMembers));
-            index++;
-        }
+        // Mở GUI thay vì hiển thị trong chat
+        TeamListGUI.open(player, teamManager, 0);
     }
 
     private void handleTransfer(Player player, String[] args) {

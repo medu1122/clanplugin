@@ -15,9 +15,8 @@ public class SQLiteStorage {
     }
 
     public void initTables() throws SQLException {
-
-        try (Connection connection = databaseManager.getConnection();
-             Statement stmt = connection.createStatement()) {
+        Connection connection = databaseManager.getConnection();
+        try (Statement stmt = connection.createStatement()) {
 
             // CLANS TABLE
             stmt.executeUpdate("""
