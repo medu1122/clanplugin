@@ -1,6 +1,7 @@
 package me.skibidi.clancore.commands;
 
 import me.skibidi.clancore.chat.TeamChatManager;
+import me.skibidi.clancore.esp.EspManager;
 import me.skibidi.clancore.gui.TeamInfoGUI;
 import me.skibidi.clancore.team.TeamManager;
 import me.skibidi.clancore.team.model.Team;
@@ -16,10 +17,12 @@ public class TeamCommand implements CommandExecutor {
 
     private final TeamManager teamManager;
     private final TeamChatManager chatManager;
+    private final EspManager espManager;
 
-    public TeamCommand(TeamManager teamManager, TeamChatManager chatManager) {
+    public TeamCommand(TeamManager teamManager, TeamChatManager chatManager, EspManager espManager) {
         this.teamManager = teamManager;
         this.chatManager = chatManager;
+        this.espManager = espManager;
     }
 
     @Override
@@ -79,6 +82,8 @@ public class TeamCommand implements CommandExecutor {
         }
         if (teamManager.createTeam(player)) {
             player.sendMessage("§aĐã tạo team thành công!");
+            // Update ESP cho player
+            espManager.updateFor(player);
         } else {
             player.sendMessage("§cKhông thể tạo team. Vui lòng thử lại sau.");
         }
@@ -119,16 +124,28 @@ public class TeamCommand implements CommandExecutor {
     }
 
     private void handleAccept(Player player) {
+        Team teamBefore = teamManager.getTeam(player);
         if (teamManager.accept(player)) {
             player.sendMessage("§aBạn đã tham gia team thành công!");
+            // Update ESP cho player và tất cả members của team
+            Team team = teamManager.getTeam(player);
+            if (team != null) {
+                espManager.updateTeamMembers(team);
+            }
         } else {
             player.sendMessage("§cBạn không có lời mời nào đang chờ xử lý.");
         }
     }
 
     private void handleLeave(Player player) {
+        Team team = teamManager.getTeam(player);
         if (teamManager.leave(player)) {
             player.sendMessage("§cBạn đã rời khỏi team.");
+            // Update ESP cho player (đã rời team) và các members còn lại
+            espManager.updateFor(player);
+            if (team != null) {
+                espManager.updateTeamMembers(team);
+            }
         } else {
             player.sendMessage("§cBạn không ở trong team nào.");
         }
@@ -158,9 +175,15 @@ public class TeamCommand implements CommandExecutor {
             return;
         }
 
+        Team currentTeam = teamManager.getTeam(player);
         if (teamManager.kick(player, target)) {
             player.sendMessage("§aĐã đuổi §e" + target.getName() + " §akhỏi team.");
             target.sendMessage("§cBạn đã bị đuổi khỏi team.");
+            // Update ESP cho target (đã bị kick) và các members còn lại
+            espManager.updateFor(target);
+            if (currentTeam != null) {
+                espManager.updateTeamMembers(currentTeam);
+            }
         } else {
             player.sendMessage("§cKhông thể đuổi người chơi này. Có thể bạn không phải leader hoặc người chơi không ở trong team của bạn.");
         }
@@ -179,8 +202,14 @@ public class TeamCommand implements CommandExecutor {
             return;
         }
         
+        Team currentTeam = teamManager.getTeam(player);
         if (teamManager.disband(player)) {
             player.sendMessage("§cĐã giải tán team.");
+            // Update ESP cho tất cả members (team đã disband)
+            if (currentTeam != null) {
+                espManager.updateTeamMembers(currentTeam);
+            }
+            espManager.updateFor(player);
         } else {
             player.sendMessage("§cKhông thể giải tán team.");
         }
@@ -321,6 +350,8 @@ public class TeamCommand implements CommandExecutor {
             if (oldLeader != null && oldLeader.isOnline()) {
                 oldLeader.sendMessage("§a" + player.getName() + " §eđã chấp nhận yêu cầu chuyển quyền leader team!");
             }
+            // Update ESP cho tất cả members (leader đã thay đổi)
+            espManager.updateTeamMembers(team);
         } else {
             player.sendMessage("§cKhông thể chuyển quyền sở hữu. Vui lòng thử lại sau.");
         }

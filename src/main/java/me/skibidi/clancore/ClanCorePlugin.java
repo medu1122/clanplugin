@@ -65,7 +65,7 @@ public class ClanCorePlugin extends JavaPlugin {
             clanManager.setConfigManager(configManager); // Set config manager and trigger DB load
             teamManager = new TeamManager();
             warManager = new WarManager();
-            espManager = new EspManager(clanManager, warManager);
+            espManager = new EspManager(clanManager, teamManager, warManager);
             clanChatManager = new ClanChatManager(clanManager);
             teamChatManager = new TeamChatManager(teamManager);
             pointManager = new ClanPointManager(clanManager, configManager);
@@ -77,7 +77,7 @@ public class ClanCorePlugin extends JavaPlugin {
             // Commands
             getCommand("clan").setExecutor(new ClanCommand(clanManager, warManager, espManager, clanChatManager, configManager, pointManager, buffManager));
             getCommand("clan").setTabCompleter(new ClanTabCompleter(clanManager));
-            getCommand("team").setExecutor(new TeamCommand(teamManager, teamChatManager));
+            getCommand("team").setExecutor(new TeamCommand(teamManager, teamChatManager, espManager));
             getCommand("team").setTabCompleter(new TeamTabCompleter());
             getCommand("clanadmin").setExecutor(new ClanAdminCommand(clanManager, pointManager, configManager));
             getCommand("clanadmin").setTabCompleter(new ClanAdminTabCompleter(clanManager));
