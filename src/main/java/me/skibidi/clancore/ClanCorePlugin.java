@@ -15,6 +15,7 @@ import me.skibidi.clancore.commands.TeamCommand;
 import me.skibidi.clancore.commands.TeamTabCompleter;
 import me.skibidi.clancore.config.ConfigManager;
 import me.skibidi.clancore.esp.EspManager;
+import me.skibidi.clancore.listeners.ChatListener;
 import me.skibidi.clancore.listeners.GUIListener;
 import me.skibidi.clancore.listeners.JoinListener;
 import me.skibidi.clancore.listeners.PvPListener;
@@ -89,6 +90,7 @@ public class ClanCorePlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new QuitListener(teamManager, espManager, buffManager), this);
             getServer().getPluginManager().registerEvents(new PvPListener(teamManager), this);
             getServer().getPluginManager().registerEvents(new GUIListener(clanManager, teamManager, pointManager, configManager, this), this);
+            getServer().getPluginManager().registerEvents(new ChatListener(clanManager, clanChatManager, teamChatManager), this);
 
         } catch (Exception e) {
             e.printStackTrace();

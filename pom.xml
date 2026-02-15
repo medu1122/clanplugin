@@ -62,6 +62,14 @@
             <version>${commons-lang3.version}</version>
         </dependency>
 
+        <!-- LuckPerms API (optional - soft dependency) -->
+        <dependency>
+            <groupId>net.luckperms</groupId>
+            <artifactId>api</artifactId>
+            <version>5.4</version>
+            <scope>provided</scope>
+        </dependency>
+
     </dependencies>
 
     <!-- ================= BUILD ================= -->
