@@ -15,6 +15,9 @@ import me.skibidi.clancore.commands.TeamCommand;
 import me.skibidi.clancore.commands.TeamTabCompleter;
 import me.skibidi.clancore.config.ConfigManager;
 import me.skibidi.clancore.esp.EspManager;
+import me.skibidi.clancore.flag.FlagManager;
+import me.skibidi.clancore.flag.FlagPlaceListener;
+import me.skibidi.clancore.flag.FlagTerritoryTask;
 import me.skibidi.clancore.listeners.ChatListener;
 import me.skibidi.clancore.listeners.GUIListener;
 import me.skibidi.clancore.listeners.JoinListener;
@@ -24,6 +27,7 @@ import me.skibidi.clancore.storage.DatabaseManager;
 import me.skibidi.clancore.storage.SQLiteStorage;
 import me.skibidi.clancore.storage.repository.ClanMemberRepository;
 import me.skibidi.clancore.storage.repository.ClanRepository;
+import me.skibidi.clancore.storage.repository.ClanFlagRepository;
 import me.skibidi.clancore.storage.repository.ClanWarRepository;
 import me.skibidi.clancore.team.TeamManager;
 import me.skibidi.clancore.war.WarManager;
@@ -36,10 +40,12 @@ public class ClanCorePlugin extends JavaPlugin {
     private ClanRepository clanRepository;
     private ClanMemberRepository clanMemberRepository;
     private ClanWarRepository clanWarRepository;
+    private ClanFlagRepository clanFlagRepository;
     private ConfigManager configManager;
     private ClanManager clanManager;
     private TeamManager teamManager;
     private WarManager warManager;
+    private FlagManager flagManager;
     private EspManager espManager;
     private ClanChatManager clanChatManager;
     private TeamChatManager teamChatManager;
@@ -63,12 +69,14 @@ public class ClanCorePlugin extends JavaPlugin {
             clanRepository = new ClanRepository(databaseManager);
             clanMemberRepository = new ClanMemberRepository(databaseManager);
             clanWarRepository = new ClanWarRepository(databaseManager);
+            clanFlagRepository = new ClanFlagRepository(databaseManager);
 
             // Managers (ClanManager sẽ load từ DB sau khi set ConfigManager)
             clanManager = new ClanManager(clanRepository, clanMemberRepository);
             clanManager.setConfigManager(configManager); // Set config manager and trigger DB load
             teamManager = new TeamManager();
             warManager = new WarManager(clanManager, clanWarRepository);
+            flagManager = new FlagManager(clanManager, clanFlagRepository);
             espManager = new EspManager(clanManager, teamManager, warManager);
             clanChatManager = new ClanChatManager(clanManager);
             teamChatManager = new TeamChatManager(teamManager);
@@ -94,6 +102,9 @@ public class ClanCorePlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new PvPListener(teamManager), this);
             getServer().getPluginManager().registerEvents(new GUIListener(clanManager, teamManager, pointManager, configManager, warManager, this), this);
             getServer().getPluginManager().registerEvents(new ChatListener(clanManager, clanChatManager, teamChatManager), this);
+            getServer().getPluginManager().registerEvents(new FlagPlaceListener(flagManager, clanManager), this);
+
+            new FlagTerritoryTask(flagManager, this).start();
 
         } catch (Exception e) {
             e.printStackTrace();

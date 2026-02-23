@@ -50,6 +50,19 @@ public class SQLiteStorage {
                 );
             """);
 
+            // Clan flags (Base - cờ đã cắm)
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS clan_flags (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    clan_name TEXT NOT NULL,
+                    world TEXT NOT NULL,
+                    x INTEGER NOT NULL,
+                    y INTEGER NOT NULL,
+                    z INTEGER NOT NULL,
+                    banner_color TEXT DEFAULT 'RED'
+                );
+            """);
+
             migrateClanPointsColumn(connection);
         }
     }

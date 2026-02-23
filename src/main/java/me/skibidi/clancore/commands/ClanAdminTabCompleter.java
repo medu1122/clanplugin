@@ -28,7 +28,7 @@ public class ClanAdminTabCompleter implements TabCompleter {
         if (args.length == 1) {
             // Subcommands với alias ngắn
             List<String> subcommands = Arrays.asList(
-                    "givepoints", "gp", "setlevel", "sl", "tpall", "tp"
+                    "givepoints", "gp", "setlevel", "sl", "tpall", "tp", "giveflag", "gf"
             );
             return subcommands.stream()
                     .filter(sub -> sub.startsWith(args[0].toLowerCase()))
@@ -38,7 +38,9 @@ public class ClanAdminTabCompleter implements TabCompleter {
         String sub = args[0].toLowerCase();
 
         if (args.length == 2) {
-            // Suggest clan names for givepoints, setlevel, tpall
+            if (sub.equals("giveflag") || sub.equals("gf")) {
+                return null;
+            }
             if (sub.equals("givepoints") || sub.equals("gp") || 
                 sub.equals("setlevel") || sub.equals("sl") || 
                 sub.equals("tpall") || sub.equals("tp")) {
@@ -47,6 +49,12 @@ public class ClanAdminTabCompleter implements TabCompleter {
                         .filter(name -> name.toLowerCase().startsWith(args[1].toLowerCase()))
                         .collect(Collectors.toList());
             }
+        }
+        if (args.length == 3 && (sub.equals("giveflag") || sub.equals("gf"))) {
+            return clanManager.getAllClans().stream()
+                    .map(clan -> clan.getName())
+                    .filter(name -> name.toLowerCase().startsWith(args[2].toLowerCase()))
+                    .collect(Collectors.toList());
         }
 
         if (args.length == 3) {
