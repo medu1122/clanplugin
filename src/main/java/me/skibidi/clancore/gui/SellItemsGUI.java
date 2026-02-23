@@ -89,7 +89,7 @@ public class SellItemsGUI {
         if (infoMeta != null) {
             infoMeta.setDisplayName("§6Thông Tin Bán Hàng");
             List<String> lore = new ArrayList<>();
-            lore.add("§7Điểm clan hiện có: §e" + clan.getClanPoints());
+            lore.add("§7Nâng cấp clan sẽ dùng §6Đá quý§7. Tính năng đang cập nhật.");
             lore.add("");
             if (totalPoints > 0) {
                 lore.add("§7Tổng giá trị:");

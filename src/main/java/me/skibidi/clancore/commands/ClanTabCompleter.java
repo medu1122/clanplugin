@@ -30,7 +30,7 @@ public class ClanTabCompleter implements TabCompleter {
             List<String> subcommands = Arrays.asList(
                     "create", "c", "join", "j", "invite", "i", "accept", "a", "deny", "d",
                     "raccept", "ra", "rdeny", "rd", "requests", "req", "leave", "l", "kick", "k",
-                    "war", "w", "info", "in", "upgrade", "up", "list", "li", "transfer", "t",
+                    "war", "w", "warmanager", "wm", "info", "in", "upgrade", "up", "list", "li", "transfer", "t",
                     "taccept", "ta", "tdeny", "td", "chat", "ch", "help", "h"
             );
             return subcommands.stream()

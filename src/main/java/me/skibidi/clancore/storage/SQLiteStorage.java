@@ -41,7 +41,15 @@ public class SQLiteStorage {
                 );
             """);
             
-            // Migrate existing databases: add clan_points column if it doesn't exist
+            // Clan war toggles (chủ clan bật/tắt war với từng clan)
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS clan_war_toggles (
+                    clan_name TEXT NOT NULL,
+                    target_clan_name TEXT NOT NULL,
+                    PRIMARY KEY (clan_name, target_clan_name)
+                );
+            """);
+
             migrateClanPointsColumn(connection);
         }
     }

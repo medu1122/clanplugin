@@ -20,18 +20,16 @@ public class ClanRepository {
     public void saveClan(Clan clan) throws SQLException {
         Connection conn = databaseManager.getConnection();
         try (PreparedStatement stmt = conn.prepareStatement(
-                "INSERT INTO clans (name, owner, level, contribution, clan_points) VALUES (?, ?, ?, ?, ?) " +
-                        "ON CONFLICT(name) DO UPDATE SET owner = ?, level = ?, contribution = ?, clan_points = ?"
+                "INSERT INTO clans (name, owner, level, contribution, clan_points) VALUES (?, ?, ?, ?, 0) " +
+                        "ON CONFLICT(name) DO UPDATE SET owner = ?, level = ?, contribution = ?, clan_points = 0"
         )) {
             stmt.setString(1, clan.getName());
             stmt.setString(2, clan.getOwner().toString());
             stmt.setInt(3, clan.getLevel());
             stmt.setInt(4, clan.getContribution());
-            stmt.setInt(5, clan.getClanPoints());
-            stmt.setString(6, clan.getOwner().toString());
-            stmt.setInt(7, clan.getLevel());
-            stmt.setInt(8, clan.getContribution());
-            stmt.setInt(9, clan.getClanPoints());
+            stmt.setString(5, clan.getOwner().toString());
+            stmt.setInt(6, clan.getLevel());
+            stmt.setInt(7, clan.getContribution());
             stmt.executeUpdate();
         }
     }
@@ -51,7 +49,6 @@ public class ClanRepository {
                     Clan clan = new Clan(rs.getString("name"), owner);
                     clan.setLevel(rs.getInt("level"));
                     clan.setContribution(rs.getInt("contribution"));
-                    clan.setClanPoints(rs.getInt("clan_points"));
                     return clan;
                 }
             }
@@ -72,7 +69,6 @@ public class ClanRepository {
                 Clan clan = new Clan(rs.getString("name"), owner);
                 clan.setLevel(rs.getInt("level"));
                 clan.setContribution(rs.getInt("contribution"));
-                clan.setClanPoints(rs.getInt("clan_points"));
                 clans.add(clan);
             }
         }
@@ -85,12 +81,11 @@ public class ClanRepository {
     public void updateClanStats(Clan clan) throws SQLException {
         Connection conn = databaseManager.getConnection();
         try (PreparedStatement stmt = conn.prepareStatement(
-                "UPDATE clans SET level = ?, contribution = ?, clan_points = ? WHERE name = ?"
+                "UPDATE clans SET level = ?, contribution = ?, clan_points = 0 WHERE name = ?"
         )) {
             stmt.setInt(1, clan.getLevel());
             stmt.setInt(2, clan.getContribution());
-            stmt.setInt(3, clan.getClanPoints());
-            stmt.setString(4, clan.getName());
+            stmt.setString(3, clan.getName());
             stmt.executeUpdate();
         }
     }

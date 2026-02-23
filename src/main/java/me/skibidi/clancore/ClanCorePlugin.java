@@ -24,6 +24,7 @@ import me.skibidi.clancore.storage.DatabaseManager;
 import me.skibidi.clancore.storage.SQLiteStorage;
 import me.skibidi.clancore.storage.repository.ClanMemberRepository;
 import me.skibidi.clancore.storage.repository.ClanRepository;
+import me.skibidi.clancore.storage.repository.ClanWarRepository;
 import me.skibidi.clancore.team.TeamManager;
 import me.skibidi.clancore.war.WarManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -34,6 +35,7 @@ public class ClanCorePlugin extends JavaPlugin {
     private SQLiteStorage sqliteStorage;
     private ClanRepository clanRepository;
     private ClanMemberRepository clanMemberRepository;
+    private ClanWarRepository clanWarRepository;
     private ConfigManager configManager;
     private ClanManager clanManager;
     private TeamManager teamManager;
@@ -60,12 +62,13 @@ public class ClanCorePlugin extends JavaPlugin {
             // Repositories
             clanRepository = new ClanRepository(databaseManager);
             clanMemberRepository = new ClanMemberRepository(databaseManager);
+            clanWarRepository = new ClanWarRepository(databaseManager);
 
             // Managers (ClanManager sẽ load từ DB sau khi set ConfigManager)
             clanManager = new ClanManager(clanRepository, clanMemberRepository);
             clanManager.setConfigManager(configManager); // Set config manager and trigger DB load
             teamManager = new TeamManager();
-            warManager = new WarManager();
+            warManager = new WarManager(clanManager, clanWarRepository);
             espManager = new EspManager(clanManager, teamManager, warManager);
             clanChatManager = new ClanChatManager(clanManager);
             teamChatManager = new TeamChatManager(teamManager);
@@ -89,7 +92,7 @@ public class ClanCorePlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(new JoinListener(espManager, buffManager, this), this);
             getServer().getPluginManager().registerEvents(new QuitListener(teamManager, espManager, buffManager), this);
             getServer().getPluginManager().registerEvents(new PvPListener(teamManager), this);
-            getServer().getPluginManager().registerEvents(new GUIListener(clanManager, teamManager, pointManager, configManager, this), this);
+            getServer().getPluginManager().registerEvents(new GUIListener(clanManager, teamManager, pointManager, configManager, warManager, this), this);
             getServer().getPluginManager().registerEvents(new ChatListener(clanManager, clanChatManager, teamChatManager), this);
 
         } catch (Exception e) {

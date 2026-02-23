@@ -27,18 +27,14 @@ public class ClanUpgradeGUI {
             infoMeta.setDisplayName("§6Cấp Độ Clan: §e" + clan.getLevel());
             List<String> lore = new ArrayList<>();
             lore.add("§7Cấp độ hiện tại: §e" + clan.getLevel());
-            lore.add("§7Điểm clan: §e" + clan.getClanPoints());
             lore.add("");
-            if (clan.getLevel() < configManager.getMaxLevel()) {
-                int requiredPoints = configManager.getUpgradeCost(clan.getLevel());
-                lore.add("§7Yêu cầu nâng cấp:");
-                lore.add("§7- Điểm clan: §e" + requiredPoints);
-            } else {
-                lore.add("§c§lĐÃ ĐẠT CẤP TỐI ĐA!");
+            int cost = configManager.getUpgradeCost(clan.getLevel());
+            lore.add("§7Yêu cầu nâng cấp (Đá quý): §e" + cost);
+            lore.add("§7(Đá quý sẽ được tích hợp sau)");
+            if (clan.getLevel() >= 5) {
+                lore.add("");
+                lore.add("§a§lĐÃ MỞ BASE (CỜ)");
             }
-            lore.add("");
-            lore.add("§7Đặt các vật phẩm có thể bán vào");
-            lore.add("§e§lÔ NÂNG CẤP §7bên dưới để bán!");
             infoMeta.setLore(lore);
             infoItem.setItemMeta(infoMeta);
         }
@@ -59,18 +55,18 @@ public class ClanUpgradeGUI {
             }
         }
 
-        // Sell items button
-        ItemStack sellButton = new ItemStack(Material.GOLD_BLOCK);
-        ItemMeta sellMeta = sellButton.getItemMeta();
-        if (sellMeta != null) {
-            sellMeta.setDisplayName("§6§lBÁN VẬT PHẨM");
+        // Ô đá quý (sắp ra mắt)
+        ItemStack gemSlot = new ItemStack(Material.EMERALD);
+        ItemMeta gemMeta = gemSlot.getItemMeta();
+        if (gemMeta != null) {
+            gemMeta.setDisplayName("§6§lĐÁ QUÝ");
             List<String> lore = new ArrayList<>();
-            lore.add("§7Click để mở GUI bán vật phẩm");
-            lore.add("§7và đóng góp điểm cho clan!");
-            sellMeta.setLore(lore);
-            sellButton.setItemMeta(sellMeta);
+            lore.add("§7Nâng cấp clan sẽ dùng §6Đá quý§7.");
+            lore.add("§7Tính năng đang được cập nhật.");
+            gemMeta.setLore(lore);
+            gemSlot.setItemMeta(gemMeta);
         }
-        inv.setItem(UPGRADE_SLOT, sellButton);
+        inv.setItem(UPGRADE_SLOT, gemSlot);
 
         // Level benefits display
         ItemStack benefits = new ItemStack(Material.ENCHANTED_BOOK);
@@ -85,45 +81,36 @@ public class ClanUpgradeGUI {
                 lore.add("§7- Buff tốc độ tổng: §e+" + pointManager.getTotalSpeedBuff(clan) + "%");
                 lore.add("§7- Buff máu tổng: §e+" + pointManager.getTotalHealthBuff(clan) + "%");
             }
-            if (clan.getLevel() < configManager.getMaxLevel()) {
-                ConfigManager.LevelConfig nextConfig = configManager.getLevelConfig(clan.getLevel() + 1);
-                if (nextConfig != null) {
-                    lore.add("");
-                    lore.add("§7Cấp độ tiếp theo " + (clan.getLevel() + 1) + ":");
-                    lore.add("§7- Số thành viên tối đa: §e" + nextConfig.getMaxMembers());
-                    lore.add("§7- Buff tốc độ thêm: §e+" + nextConfig.getSpeedBuff() + "%");
-                    lore.add("§7- Buff máu thêm: §e+" + nextConfig.getHealthBuff() + "%");
-                }
+            ConfigManager.LevelConfig nextConfig = configManager.getLevelConfig(clan.getLevel() + 1);
+            if (nextConfig != null) {
+                lore.add("");
+                lore.add("§7Cấp độ tiếp theo " + (clan.getLevel() + 1) + ":");
+                lore.add("§7- Số thành viên tối đa: §e" + nextConfig.getMaxMembers());
+                lore.add("§7- Buff tốc độ thêm: §e+" + nextConfig.getSpeedBuff() + "%");
+                lore.add("§7- Buff máu thêm: §e+" + nextConfig.getHealthBuff() + "%");
+            }
+            if (clan.getLevel() == 4) {
+                lore.add("");
+                lore.add("§aLevel 5: Mở Base (cờ)!");
             }
             benefitsMeta.setLore(lore);
             benefits.setItemMeta(benefitsMeta);
         }
         inv.setItem(40, benefits);
 
-        // Upgrade button
-        if (clan.getLevel() < configManager.getMaxLevel()) {
-            int requiredPoints = configManager.getUpgradeCost(clan.getLevel());
-            boolean canUpgrade = clan.getClanPoints() >= requiredPoints;
-            
-            ItemStack upgradeButton = new ItemStack(canUpgrade ? Material.EMERALD_BLOCK : Material.REDSTONE_BLOCK);
-            ItemMeta upgradeButtonMeta = upgradeButton.getItemMeta();
-            if (upgradeButtonMeta != null) {
-                upgradeButtonMeta.setDisplayName(canUpgrade ? "§a§lNÂNG CẤP CLAN" : "§c§lKHÔNG THỂ NÂNG CẤP");
-                List<String> lore = new ArrayList<>();
-                lore.add("§7Điểm cần: §e" + requiredPoints);
-                lore.add("§7Điểm hiện có: §e" + clan.getClanPoints());
-                if (canUpgrade) {
-                    lore.add("");
-                    lore.add("§aClick để nâng cấp!");
-                } else {
-                    lore.add("");
-                    lore.add("§cCần thêm §e" + (requiredPoints - clan.getClanPoints()) + " §cđiểm!");
-                }
-                upgradeButtonMeta.setLore(lore);
-                upgradeButton.setItemMeta(upgradeButtonMeta);
-            }
-            inv.setItem(UPGRADE_BUTTON_SLOT, upgradeButton);
+        // Upgrade button (đá quý - sắp ra mắt)
+        int cost = configManager.getUpgradeCost(clan.getLevel());
+        ItemStack upgradeButton = new ItemStack(Material.EMERALD_BLOCK);
+        ItemMeta upgradeButtonMeta = upgradeButton.getItemMeta();
+        if (upgradeButtonMeta != null) {
+            upgradeButtonMeta.setDisplayName("§6§lNÂNG CẤP CLAN (ĐÁ QUÝ)");
+            List<String> lore = new ArrayList<>();
+            lore.add("§7Chi phí: §e" + cost + " §6Đá quý");
+            lore.add("§7Tính năng đang được cập nhật.");
+            upgradeButtonMeta.setLore(lore);
+            upgradeButton.setItemMeta(upgradeButtonMeta);
         }
+        inv.setItem(UPGRADE_BUTTON_SLOT, upgradeButton);
 
         // Close button
         ItemStack close = new ItemStack(Material.BARRIER);

@@ -68,8 +68,8 @@ public class ConfigManager {
             }
         }
 
-        // Load level configs
-        maxLevel = config.getInt("clan-levels.max-level", 5);
+        // Load level configs (0 = không giới hạn level)
+        maxLevel = config.getInt("clan-levels.max-level", 0);
         levelConfigs.clear();
         if (config.contains("clan-levels.levels")) {
             org.bukkit.configuration.ConfigurationSection section = config.getConfigurationSection("clan-levels.levels");
@@ -91,7 +91,13 @@ public class ConfigManager {
         }
     }
 
+    /**
+     * Chi phí nâng cấp: level 1-4 theo config, từ level 5 trở đi dùng chung cost của level 5.
+     */
     public int getUpgradeCost(int currentLevel) {
+        if (currentLevel >= 5) {
+            return upgradeCosts.getOrDefault(5, upgradeCosts.getOrDefault(4, 0));
+        }
         return upgradeCosts.getOrDefault(currentLevel, 0);
     }
 
@@ -103,12 +109,22 @@ public class ConfigManager {
         return sellableItems.getOrDefault(material, 0);
     }
 
+    /** 0 = không giới hạn level. */
     public int getMaxLevel() {
         return maxLevel;
     }
 
+    public boolean isLevelUnlimited() {
+        return maxLevel <= 0;
+    }
+
+    /**
+     * Nếu level chưa có trong config (level > max đã cấu hình), trả về config của level cao nhất có (vd level 5).
+     */
     public LevelConfig getLevelConfig(int level) {
-        return levelConfigs.get(level);
+        if (levelConfigs.containsKey(level)) return levelConfigs.get(level);
+        int maxConfigured = levelConfigs.keySet().stream().max(Integer::compareTo).orElse(1);
+        return levelConfigs.get(maxConfigured);
     }
 
     public static class LevelConfig {

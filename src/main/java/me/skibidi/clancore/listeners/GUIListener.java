@@ -7,10 +7,12 @@ import me.skibidi.clancore.config.ConfigManager;
 import me.skibidi.clancore.gui.ClanInfoGUI;
 import me.skibidi.clancore.gui.ClanListGUI;
 import me.skibidi.clancore.gui.ClanUpgradeGUI;
+import me.skibidi.clancore.gui.ClanWarGUI;
 import me.skibidi.clancore.gui.SellItemsGUI;
 import me.skibidi.clancore.gui.TeamInfoGUI;
 import me.skibidi.clancore.gui.TeamListGUI;
 import me.skibidi.clancore.team.TeamManager;
+import me.skibidi.clancore.war.WarManager;
 import me.skibidi.clancore.team.model.Team;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -31,17 +33,20 @@ public class GUIListener implements Listener {
     private final TeamManager teamManager;
     private final ClanPointManager pointManager;
     private final ConfigManager configManager;
+    private final WarManager warManager;
     private final Plugin plugin;
     private final Map<UUID, Integer> clanInfoPages = new HashMap<>();
     private final Map<UUID, Integer> teamInfoPages = new HashMap<>();
     private final Map<UUID, Integer> clanListPages = new HashMap<>();
     private final Map<UUID, Integer> teamListPages = new HashMap<>();
+    private final Map<UUID, Integer> clanWarPages = new HashMap<>();
 
-    public GUIListener(ClanManager clanManager, TeamManager teamManager, ClanPointManager pointManager, ConfigManager configManager, Plugin plugin) {
+    public GUIListener(ClanManager clanManager, TeamManager teamManager, ClanPointManager pointManager, ConfigManager configManager, WarManager warManager, Plugin plugin) {
         this.clanManager = clanManager;
         this.teamManager = teamManager;
         this.pointManager = pointManager;
         this.configManager = configManager;
+        this.warManager = warManager;
         this.plugin = plugin;
     }
 
@@ -137,9 +142,7 @@ public class GUIListener implements Listener {
             // Early return if clicking empty slot (no action needed)
             if (clicked == null || clicked.getType() == Material.AIR) return;
 
-            if (event.getSlot() == 22) { // Sell items button
-                event.setCancelled(true);
-                SellItemsGUI.open(player, clan, configManager, pointManager);
+            if (event.getSlot() == 22) { // Ô Đá quý (sắp ra mắt) - không mở gì
                 return;
             }
 
@@ -160,6 +163,52 @@ public class GUIListener implements Listener {
 
             // Block other slots
             event.setCancelled(true);
+        }
+
+        // Clan War Manager GUI
+        if (title.startsWith("§cQuản Lý Chiến Tranh §7")) {
+            event.setCancelled(true);
+            Clan clan = clanManager.getClan(player);
+            if (clan == null) { player.closeInventory(); return; }
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+
+            int page = clanWarPages.getOrDefault(player.getUniqueId(), 0);
+            java.util.List<Clan> others = new java.util.ArrayList<>();
+            for (Clan c : clanManager.getAllClans()) {
+                if (c != clan) others.add(c);
+            }
+
+            if (event.getSlot() == 49 && clicked.getType() == Material.BARRIER) {
+                player.closeInventory();
+                return;
+            }
+            if (event.getSlot() == 45 && clicked.getType() == Material.ARROW && page > 0) {
+                clanWarPages.put(player.getUniqueId(), page - 1);
+                ClanWarGUI.open(player, clan, clanManager, warManager, page - 1);
+                return;
+            }
+            if (event.getSlot() == 53 && clicked.getType() == Material.ARROW) {
+                int totalPages = Math.max(1, (int) Math.ceil((double) others.size() / 28));
+                if (page < totalPages - 1) {
+                    clanWarPages.put(player.getUniqueId(), page + 1);
+                    ClanWarGUI.open(player, clan, clanManager, warManager, page + 1);
+                }
+                return;
+            }
+            int[] slots = ClanWarGUI.getClanSlots();
+            for (int i = 0; i < slots.length; i++) {
+                if (event.getSlot() == slots[i]) {
+                    int idx = page * 28 + i;
+                    if (idx >= others.size()) break;
+                    Clan target = others.get(idx);
+                    boolean was = warManager.isWarEnabled(clan, target);
+                    warManager.setWarEnabled(clan, target, !was);
+                    player.sendMessage(was ? "§aĐã tắt chiến tranh với clan §e" + target.getName() + "§a." : "§cĐã bật chiến tranh với clan §e" + target.getName() + "§c. (Chỉ khi họ cũng bật mới là đang chiến tranh)");
+                    ClanWarGUI.open(player, clan, clanManager, warManager, page);
+                    break;
+                }
+            }
+            return;
         }
 
         // Sell Items GUI - allow item placement in sell slots
@@ -198,64 +247,9 @@ public class GUIListener implements Listener {
             // Early return if clicking empty slot in non-sell slots
             if (clicked == null || clicked.getType() == Material.AIR) return;
 
-            if (event.getSlot() == 40) { // Sell all button
+            if (event.getSlot() == 40) { // Sell all - đã chuyển sang Đá quý (sắp ra mắt)
                 event.setCancelled(true);
-                org.bukkit.inventory.Inventory inv = event.getInventory();
-                int totalPoints = 0;
-                java.util.List<ItemStack> itemsToRemove = new java.util.ArrayList<>();
-
-                for (int slot : SellItemsGUI.getSellSlots()) {
-                    ItemStack item = inv.getItem(slot);
-                    if (item != null && item.getType() != Material.AIR) {
-                        Material material = item.getType();
-                        if (configManager.isSellable(material)) {
-                            int pricePerItem = configManager.getSellPrice(material);
-                            int amount = item.getAmount();
-                            int itemPoints = pricePerItem * amount;
-                            totalPoints += itemPoints;
-                            itemsToRemove.add(item);
-                        }
-                    }
-                }
-
-                if (totalPoints > 0) {
-                    // Add points to clan FIRST (before removing items)
-                    clan.addClanPoints(totalPoints);
-                    
-                    // Save to database BEFORE removing items
-                    if (clanManager.updateClanStats(clan)) {
-                        // Database save successful - now remove items
-                        for (int slot : SellItemsGUI.getSellSlots()) {
-                            ItemStack item = inv.getItem(slot);
-                            if (item != null && item.getType() != Material.AIR) {
-                                Material material = item.getType();
-                                if (configManager.isSellable(material)) {
-                                    inv.setItem(slot, null);
-                                }
-                            }
-                        }
-                        
-                        player.sendMessage("§aĐã bán vật phẩm và nhận §e" + totalPoints + " §ađiểm clan!");
-                    } else {
-                        // Rollback: remove points if DB save failed
-                        // Check return value to ensure rollback succeeded
-                        if (!clan.removeClanPoints(totalPoints)) {
-                            // Rollback failed - points may have been spent by another operation
-                            System.err.println("[ClanCore] CRITICAL: Failed to rollback clan points in Sell Items GUI for clan: " + 
-                                    clan.getName() + ". Attempted to remove " + totalPoints + " points. " +
-                                    "Points may be in inconsistent state. Player: " + player.getName());
-                            player.sendMessage("§c§lLỖI NGHIÊM TRỌNG: Không thể hoàn tác điểm clan! Vui lòng liên hệ admin ngay lập tức!");
-                        } else {
-                            player.sendMessage("§cLỗi khi lưu điểm clan! Vui lòng thử lại sau.");
-                        }
-                        return; // Don't remove items or update GUI if save failed
-                    }
-                    
-                    // Update info panel
-                    SellItemsGUI.updateInfoPanel(inv, clan, configManager, pointManager);
-                } else {
-                    player.sendMessage("§cKhông có vật phẩm nào để bán!");
-                }
+                player.sendMessage("§eBán vật phẩm đổi Đá quý đang được cập nhật.");
                 return;
             }
 
@@ -387,6 +381,7 @@ public class GUIListener implements Listener {
             teamInfoPages.remove(uuid);
             clanListPages.remove(uuid);
             teamListPages.remove(uuid);
+            clanWarPages.remove(uuid);
         }
     }
 }

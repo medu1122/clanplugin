@@ -1,15 +1,16 @@
 # ClanCore Configuration
 
-# Clan Points System
+# Nâng cấp clan dùng Đá quý (sẽ tích hợp sau). Clan points đã bỏ.
 clan-points:
-  # Số điểm clan point cần để upgrade lên level tiếp theo
+  # Chi phí Đá quý để upgrade (từ level 5 trở đi dùng chung cost level 5)
   upgrade-costs:
-    1: 1000    # Level 1 -> Level 2: 1000 points
-    2: 2000    # Level 2 -> Level 3: 2000 points
-    3: 3000    # Level 3 -> Level 4: 3000 points
-    4: 5000    # Level 4 -> Level 5: 5000 points
+    1: 1000
+    2: 2000
+    3: 3000
+    4: 5000
+    5: 7500    # Level 5+ dùng chung 7500
 
-  # Items có thể sell để lấy clan point
+  # Giữ lại cho tương lai (đá quý)
   sellable-items:
     # Format: MATERIAL_NAME:points
     DIAMOND: 10
@@ -25,8 +26,8 @@ clan-points:
 
 # Clan Level System
 clan-levels:
-  # Max level
-  max-level: 5
+  # Max level (0 = không giới hạn)
+  max-level: 0
   
   # Level configurations
   levels:

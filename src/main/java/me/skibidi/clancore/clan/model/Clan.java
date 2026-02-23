@@ -23,7 +23,6 @@ public class Clan {
     private int maxSlots = 50;
     private int level = 1;
     private int contribution = 0;
-    private int clanPoints = 0; // Điểm riêng để upgrade clan
     private String bannerData;
 
     public Clan(String name, UUID owner) {
@@ -161,25 +160,10 @@ public class Clan {
         return members.size() >= maxSlots;
     }
 
-    public int getClanPoints() {
-        return clanPoints;
-    }
-
-    public void setClanPoints(int clanPoints) {
-        this.clanPoints = Math.max(0, clanPoints);
-    }
-
-    public void addClanPoints(int amount) {
-        if (amount > 0) {
-            this.clanPoints += amount;
-        }
-    }
-
-    public boolean removeClanPoints(int amount) {
-        if (amount > 0 && this.clanPoints >= amount) {
-            this.clanPoints -= amount;
-            return true;
-        }
-        return false;
+    /**
+     * Level 5+ mới mở Base (cờ).
+     */
+    public boolean canPlaceFlag() {
+        return level >= 5;
     }
 }

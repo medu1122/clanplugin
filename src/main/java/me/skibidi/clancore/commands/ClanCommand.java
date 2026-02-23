@@ -10,6 +10,7 @@ import me.skibidi.clancore.esp.EspManager;
 import me.skibidi.clancore.gui.ClanInfoGUI;
 import me.skibidi.clancore.gui.ClanListGUI;
 import me.skibidi.clancore.gui.ClanUpgradeGUI;
+import me.skibidi.clancore.gui.ClanWarGUI;
 import me.skibidi.clancore.war.WarManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -80,6 +81,7 @@ public class ClanCommand implements CommandExecutor {
             case "leave", "l" -> handleLeave(player);
             case "kick", "k" -> handleKick(player, args);
             case "war", "w" -> handleWar(player, args);
+            case "warmanager", "wm" -> handleWarManager(player);
             case "info", "in" -> handleInfo(player);
             case "upgrade", "up" -> handleUpgrade(player);
             case "list", "li" -> handleList(player);
@@ -333,29 +335,40 @@ public class ClanCommand implements CommandExecutor {
             player.sendMessage("§cBạn không ở trong clan nào.");
             return;
         }
-        // Kiểm tra phân quyền: chỉ owner của clan này mới có thể khai chiến
         if (!clanManager.isOwner(player, own)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể khai chiến.");
+            player.sendMessage("§cChỉ chủ clan mới có thể quản lý chiến tranh.");
             return;
         }
-
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan war <clan>");
+            ClanWarGUI.open(player, own, clanManager, warManager, 0);
             return;
         }
-
         Clan targetClan = clanManager.getClan(args[1]);
         if (targetClan == null) {
             player.sendMessage("§cKhông tìm thấy clan §e" + args[1] + "§c.");
             return;
         }
-
-        if (warManager.startWar(own, targetClan) != null) {
-            player.sendMessage("§c§lBạn đã khai chiến với clan §e§l" + targetClan.getName() + "§c§l!");
-            espManager.updateAll();
-        } else {
-            player.sendMessage("§cBạn đã ở trong trạng thái chiến tranh với clan này hoặc mục tiêu không hợp lệ.");
+        if (targetClan == own) {
+            player.sendMessage("§cKhông thể bật war với chính clan của bạn.");
+            return;
         }
+        boolean was = warManager.isWarEnabled(own, targetClan);
+        warManager.setWarEnabled(own, targetClan, !was);
+        player.sendMessage(was ? "§aĐã tắt chiến tranh với clan §e" + targetClan.getName() + "§a." : "§cĐã bật chiến tranh với clan §e" + targetClan.getName() + "§c.");
+        espManager.updateAll();
+    }
+
+    private void handleWarManager(Player player) {
+        Clan clan = clanManager.getClan(player);
+        if (clan == null) {
+            player.sendMessage("§cBạn không ở trong clan nào.");
+            return;
+        }
+        if (!clanManager.isOwner(player, clan)) {
+            player.sendMessage("§cChỉ chủ clan mới có thể mở quản lý chiến tranh.");
+            return;
+        }
+        ClanWarGUI.open(player, clan, clanManager, warManager, 0);
     }
 
     private void handleInfo(Player player) {
@@ -515,7 +528,9 @@ public class ClanCommand implements CommandExecutor {
         commands.add("§e/clan requests §7- Xem danh sách yêu cầu");
         commands.add("§e/clan leave §7- Rời khỏi clan");
         commands.add("§e/clan kick <người chơi> §7- Đuổi thành viên");
-        commands.add("§e/clan war <clan> §7- Khai chiến với clan khác");
+        commands.add("§e/clan war §7- Mở quản lý chiến tranh (bật/tắt war)");
+        commands.add("§e/clan war <clan> §7- Bật/tắt war với clan (chủ clan)");
+        commands.add("§e/clan warmanager §7- Mở GUI quản lý chiến tranh");
         commands.add("§e/clan info §7- Xem thông tin clan");
         commands.add("§e/clan upgrade §7- Nâng cấp clan (chủ clan)");
         commands.add("§e/clan list §7- Xem danh sách clans");

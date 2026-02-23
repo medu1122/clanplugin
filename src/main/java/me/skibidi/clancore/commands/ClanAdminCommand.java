@@ -34,7 +34,6 @@ public class ClanAdminCommand implements CommandExecutor {
 
         if (args.length == 0) {
             sender.sendMessage("§6=== Clan Admin Commands ===");
-            sender.sendMessage("§e/clanadmin givepoints <clan> <số điểm> §7- Cho điểm clan");
             sender.sendMessage("§e/clanadmin setlevel <clan> <level> §7- Set level cho clan");
             sender.sendMessage("§e/clanadmin tpall <clan> §7- Teleport tất cả thành viên clan");
             return true;
@@ -52,35 +51,7 @@ public class ClanAdminCommand implements CommandExecutor {
     }
 
     private void handleGivePoints(CommandSender sender, String[] args) {
-        if (args.length < 3) {
-            sender.sendMessage("§cCú pháp: §e/clanadmin givepoints <clan> <số điểm>");
-            return;
-        }
-
-        Clan clan = clanManager.getClan(args[1]);
-        if (clan == null) {
-            sender.sendMessage("§cKhông tìm thấy clan §e" + args[1] + "§c.");
-            return;
-        }
-
-        try {
-            int points = Integer.parseInt(args[2]);
-            if (points <= 0) {
-                sender.sendMessage("§cSố điểm phải lớn hơn 0!");
-                return;
-            }
-
-            clan.addClanPoints(points);
-            if (clanManager.updateClanStats(clan)) {
-                sender.sendMessage("§aĐã cho clan §e" + clan.getName() + " §a§e" + points + " §ađiểm clan!");
-            } else {
-                // Rollback: remove points if DB save failed
-                clan.removeClanPoints(points);
-                sender.sendMessage("§cLỗi khi lưu điểm clan! Vui lòng thử lại sau.");
-            }
-        } catch (NumberFormatException e) {
-            sender.sendMessage("§cSố điểm không hợp lệ!");
-        }
+        sender.sendMessage("§eĐiểm clan đã bỏ. Nâng cấp clan sẽ dùng §6Đá quý§e (tính năng sẽ cập nhật).");
     }
 
     private void handleSetLevel(CommandSender sender, String[] args) {
