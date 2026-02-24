@@ -91,10 +91,9 @@ public class ChatListener implements Listener {
         
         String clanTag = "";
         if (clan != null) {
-            clanTag = "§7[§6" + clan.getName() + "§7]";
+            clanTag = "§7[§6" + clan.getName() + "§7] ";
         }
-        
-        // Format: [tên clan][rank] medu1122 : hi
+        // Format: [ClanName] [rank] PlayerName: message (ưu tiên tên clan ở đầu)
         String format = clanTag + rankPrefix + "%1$s§7: %2$s";
         event.setFormat(format);
     }

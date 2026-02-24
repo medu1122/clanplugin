@@ -7,10 +7,15 @@ import me.skibidi.clancore.clan.ClanPointManager;
 import me.skibidi.clancore.clan.model.Clan;
 import me.skibidi.clancore.config.ConfigManager;
 import me.skibidi.clancore.esp.EspManager;
+import me.skibidi.clancore.gui.ClanCreateConfirmGUI;
 import me.skibidi.clancore.gui.ClanInfoGUI;
 import me.skibidi.clancore.gui.ClanListGUI;
+import me.skibidi.clancore.flag.FlagManager;
+import me.skibidi.clancore.gui.ClanMenuGUI;
 import me.skibidi.clancore.gui.ClanUpgradeGUI;
 import me.skibidi.clancore.gui.ClanWarGUI;
+import me.skibidi.clancore.listeners.GUIListener;
+import me.skibidi.clancore.util.MessageUtil;
 import me.skibidi.clancore.war.WarManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -20,7 +25,15 @@ import org.bukkit.entity.Player;
 
 import java.util.UUID;
 
+/**
+ * Phản hồi lệnh chỉ gửi Action Bar (chỉ hiện bên client), không ghi vào chat.
+ */
 public class ClanCommand implements CommandExecutor {
+
+    /** Phản hồi hiển thị bằng Title (chữ to, hiện lâu) để player đọc kịp. */
+    private static void send(Player p, String msg) {
+        if (p != null && p.isOnline()) MessageUtil.sendFeedback(p, msg);
+    }
 
     private final ClanManager clanManager;
     private final WarManager warManager;
@@ -29,9 +42,12 @@ public class ClanCommand implements CommandExecutor {
     private final ConfigManager configManager;
     private final ClanPointManager pointManager;
     private final BuffManager buffManager;
+    private final Object moneyPluginRef;
+    private final GUIListener guiListener;
+    private final FlagManager flagManager;
 
-    public ClanCommand(ClanManager clanManager, WarManager warManager, EspManager espManager, 
-                      ClanChatManager chatManager, ConfigManager configManager, ClanPointManager pointManager, BuffManager buffManager) {
+    public ClanCommand(ClanManager clanManager, WarManager warManager, EspManager espManager,
+                      ClanChatManager chatManager, ConfigManager configManager, ClanPointManager pointManager, BuffManager buffManager, Object moneyPluginRef, GUIListener guiListener, FlagManager flagManager) {
         this.clanManager = clanManager;
         this.warManager = warManager;
         this.espManager = espManager;
@@ -39,6 +55,9 @@ public class ClanCommand implements CommandExecutor {
         this.configManager = configManager;
         this.pointManager = pointManager;
         this.buffManager = buffManager;
+        this.moneyPluginRef = moneyPluginRef;
+        this.guiListener = guiListener;
+        this.flagManager = flagManager;
     }
 
     @Override
@@ -50,7 +69,9 @@ public class ClanCommand implements CommandExecutor {
         }
 
         if (args.length == 0) {
-            showHelpPage(player, 0);
+            Clan clan = clanManager.getClan(player);
+            boolean isOwner = clan != null && clanManager.isOwner(player, clan);
+            ClanMenuGUI.open(player, clan, isOwner, configManager, pointManager, warManager, moneyPluginRef, flagManager);
             return true;
         }
 
@@ -70,6 +91,11 @@ public class ClanCommand implements CommandExecutor {
 
         String sub = args[0].toLowerCase();
         switch (sub) {
+            case "menu", "m" -> {
+                Clan c = clanManager.getClan(player);
+                boolean owner = c != null && clanManager.isOwner(player, c);
+                ClanMenuGUI.open(player, c, owner, configManager, pointManager, warManager, moneyPluginRef, flagManager);
+            }
             case "create", "c" -> handleCreate(player, args);
             case "join", "j" -> handleJoin(player, args);
             case "invite", "i" -> handleInvite(player, args);
@@ -90,8 +116,8 @@ public class ClanCommand implements CommandExecutor {
             case "tdeny", "td" -> handleTransferDeny(player);
             case "chat", "ch" -> handleChat(player, args);
             default -> {
-                player.sendMessage("§cLệnh không hợp lệ. Gõ §e/clan §cđể xem danh sách lệnh.");
-                player.sendMessage("§7Hoặc dùng §e/clan help <số trang> §7để xem các trang khác.");
+                send(player,"§cLệnh không hợp lệ. Gõ §e/clan §cđể xem danh sách lệnh.");
+                send(player,"§7Hoặc dùng §e/clan help <số trang> §7để xem các trang khác.");
             }
         }
 
@@ -100,196 +126,211 @@ public class ClanCommand implements CommandExecutor {
 
     private void handleCreate(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan create <tên>");
+            send(player, "§cCú pháp: §e/clan create <tên>");
             return;
         }
-
-            String name = args[1];
-
-            if (clanManager.createClan(name, player)) {
-            player.sendMessage("§aĐã tạo clan §e" + name + "§a thành công!");
-            espManager.updateFor(player);
-        } else {
-            player.sendMessage("§cKhông thể tạo clan. Có thể bạn đã có clan hoặc tên đã được sử dụng.");
+        String name = args[1].trim();
+        if (name.isEmpty()) {
+            send(player, "§cTên clan không hợp lệ.");
+            return;
         }
+        if (clanManager.getClan(player) != null) {
+            send(player, "§cBạn đã ở trong clan. Hãy rời clan trước khi tạo mới.");
+            return;
+        }
+        if (!pointManager.hasMoneyPlugin()) {
+            send(player, "§eTạo clan cần §6100 Đá Quý Shard§e (MoneyPlugin).");
+            return;
+        }
+        int cost = ClanCreateConfirmGUI.CREATE_CLAN_SHARD_COST;
+        int have = pointManager.countShardsInInventory(player);
+        if (have < cost) {
+            send(player, "§cTạo clan tốn §e" + cost + " §5Đá Quý Shard§c. Bạn có: §e" + have);
+            return;
+        }
+        guiListener.addPendingCreate(player.getUniqueId(), name);
+        ClanCreateConfirmGUI.open(player, name, cost);
     }
 
     private void handleJoin(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan join <tên>");
+            send(player,"§cCú pháp: §e/clan join <tên>");
             return;
         }
 
         Clan clan = clanManager.getClan(args[1]);
         if (clan == null) {
-            player.sendMessage("§cKhông tìm thấy clan §e" + args[1] + "§c.");
+            send(player,"§cKhông tìm thấy clan §e" + args[1] + "§c.");
             return;
         }
 
         if (clanManager.requestJoin(player, clan)) {
-            player.sendMessage("§aĐã gửi yêu cầu tham gia clan §e" + clan.getName() + "§a.");
+            send(player,"§aĐã gửi yêu cầu tham gia clan §e" + clan.getName() + "§a.");
         } else {
-            player.sendMessage("§cKhông thể gửi yêu cầu tham gia.");
+            send(player,"§cKhông thể gửi yêu cầu tham gia.");
         }
     }
 
     private void handleInvite(Player player, String[] args) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         // Kiểm tra phân quyền: chỉ owner của clan này mới có thể invite
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể mời thành viên.");
+            send(player,"§cChỉ chủ clan mới có thể mời thành viên.");
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan invite <người chơi>");
+            send(player,"§cCú pháp: §e/clan invite <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null) {
-            player.sendMessage("§cKhông tìm thấy người chơi §e" + args[1] + "§c.");
+            send(player,"§cKhông tìm thấy người chơi §e" + args[1] + "§c.");
             return;
         }
 
         if (clanManager.invitePlayer(clan, target)) {
-            player.sendMessage("§aĐã mời §e" + target.getName() + " §avào clan.");
-            target.sendMessage("§6Bạn đã được mời tham gia clan §e" + clan.getName() + "§6. Dùng §e/clan accept §6hoặc §e/clan deny§6.");
+            send(player,"§aĐã mời §e" + target.getName() + " §avào clan.");
+            send(target,"§6Bạn đã được mời tham gia clan §e" + clan.getName() + "§6. Dùng §e/clan accept §6hoặc §e/clan deny§6.");
             // Phát sound ping để thông báo
             target.playSound(target.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
         } else {
-            player.sendMessage("§cKhông thể mời người chơi này.");
+            send(player,"§cKhông thể mời người chơi này.");
         }
     }
 
     private void handleAccept(Player player) {
         if (clanManager.acceptInvite(player)) {
-            player.sendMessage("§aBạn đã tham gia clan thành công!");
+            clanManager.updatePlayerListName(player);
+            send(player,"§aBạn đã tham gia clan thành công!");
             espManager.updateFor(player);
             // Apply buffs khi player join clan
             if (buffManager != null) {
                 buffManager.applyBuffs(player);
             }
         } else {
-            player.sendMessage("§cBạn không có lời mời nào đang chờ xử lý.");
+            send(player,"§cBạn không có lời mời nào đang chờ xử lý.");
         }
     }
 
     private void handleDeny(Player player) {
         if (clanManager.denyInvite(player)) {
-            player.sendMessage("§cĐã từ chối lời mời.");
+            send(player,"§cĐã từ chối lời mời.");
         } else {
-            player.sendMessage("§cBạn không có lời mời nào đang chờ xử lý.");
+            send(player,"§cBạn không có lời mời nào đang chờ xử lý.");
         }
     }
 
     private void handleRequestAccept(Player player, String[] args) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         // Kiểm tra phân quyền: chỉ owner của clan này mới có thể accept request
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể chấp nhận yêu cầu tham gia.");
+            send(player,"§cChỉ chủ clan mới có thể chấp nhận yêu cầu tham gia.");
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan raccept <người chơi>");
+            send(player,"§cCú pháp: §e/clan raccept <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null) {
-            player.sendMessage("§cNgười chơi phải online để chấp nhận.");
+            send(player,"§cNgười chơi phải online để chấp nhận.");
             return;
         }
 
         UUID uuid = target.getUniqueId();
         if (clanManager.acceptRequest(clan, uuid)) {
-            player.sendMessage("§aĐã chấp nhận yêu cầu tham gia từ §e" + target.getName() + "§a.");
-            target.sendMessage("§aYêu cầu tham gia clan §e" + clan.getName() + " §ađã được chấp nhận.");
+            clanManager.updatePlayerListName(target);
+            send(player,"§aĐã chấp nhận yêu cầu tham gia từ §e" + target.getName() + "§a.");
+            send(target,"§aYêu cầu tham gia clan §e" + clan.getName() + " §ađã được chấp nhận.");
             espManager.updateFor(target);
             // Apply buffs khi player join clan
             if (buffManager != null) {
                 buffManager.applyBuffs(target);
             }
         } else {
-            player.sendMessage("§cKhông có yêu cầu tham gia từ người chơi này.");
+            send(player,"§cKhông có yêu cầu tham gia từ người chơi này.");
         }
     }
 
     private void handleRequestDeny(Player player, String[] args) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         // Kiểm tra phân quyền: chỉ owner của clan này mới có thể deny request
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể từ chối yêu cầu tham gia.");
+            send(player,"§cChỉ chủ clan mới có thể từ chối yêu cầu tham gia.");
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan rdeny <người chơi>");
+            send(player,"§cCú pháp: §e/clan rdeny <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null) {
-            player.sendMessage("§cNgười chơi phải online để từ chối.");
+            send(player,"§cNgười chơi phải online để từ chối.");
             return;
         }
 
         if (clanManager.denyRequest(clan, target.getUniqueId())) {
-            player.sendMessage("§cĐã từ chối yêu cầu tham gia từ §e" + target.getName() + "§c.");
-            target.sendMessage("§cYêu cầu tham gia clan §e" + clan.getName() + " §cđã bị từ chối.");
+            send(player,"§cĐã từ chối yêu cầu tham gia từ §e" + target.getName() + "§c.");
+            send(target,"§cYêu cầu tham gia clan §e" + clan.getName() + " §cđã bị từ chối.");
         } else {
-            player.sendMessage("§cKhông có yêu cầu tham gia từ người chơi này.");
+            send(player,"§cKhông có yêu cầu tham gia từ người chơi này.");
         }
     }
 
     private void handleRequests(Player player) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         // Kiểm tra phân quyền: chỉ owner của clan này mới có thể xem requests
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể xem yêu cầu tham gia.");
+            send(player,"§cChỉ chủ clan mới có thể xem yêu cầu tham gia.");
             return;
         }
 
         if (clan.getJoinRequests().isEmpty()) {
-            player.sendMessage("§7Không có yêu cầu tham gia nào.");
+            send(player,"§7Không có yêu cầu tham gia nào.");
             return;
         }
 
-        player.sendMessage("§6=== Yêu cầu tham gia ===");
+        send(player,"§6=== Yêu cầu tham gia ===");
         for (UUID uuid : clan.getJoinRequests().keySet()) {
             Player p = Bukkit.getPlayer(uuid);
-            player.sendMessage("§7- §e" + (p != null ? p.getName() : uuid));
+            send(player,"§7- §e" + (p != null ? p.getName() : uuid));
         }
     }
 
     private void handleLeave(Player player) {
         if (!clanManager.isInClan(player)) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         if (clanManager.leaveClan(player)) {
+            clanManager.updatePlayerListName(player);
             espManager.clear(player);
             if (buffManager != null) {
                 buffManager.removeBuffs(player);
             }
-            player.sendMessage("§cBạn đã rời khỏi clan.");
+            send(player,"§cBạn đã rời khỏi clan.");
         }
         // Nếu leaveClan() trả về false, thông báo lỗi đã được gửi trong leaveClan()
     }
@@ -297,46 +338,47 @@ public class ClanCommand implements CommandExecutor {
     private void handleKick(Player player, String[] args) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         // Kiểm tra phân quyền: chỉ owner của clan này mới có thể kick
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể đuổi thành viên.");
+            send(player,"§cChỉ chủ clan mới có thể đuổi thành viên.");
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan kick <người chơi>");
+            send(player,"§cCú pháp: §e/clan kick <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null) {
-            player.sendMessage("§cNgười chơi phải online để đuổi.");
+            send(player,"§cNgười chơi phải online để đuổi.");
             return;
         }
 
         if (clanManager.kickMember(clan, target.getUniqueId())) {
-            player.sendMessage("§aĐã đuổi §e" + target.getName() + " §akhỏi clan.");
-            target.sendMessage("§cBạn đã bị đuổi khỏi clan §e" + clan.getName() + "§c.");
+            clanManager.updatePlayerListName(target);
+            send(player,"§aĐã đuổi §e" + target.getName() + " §akhỏi clan.");
+            send(target,"§cBạn đã bị đuổi khỏi clan §e" + clan.getName() + "§c.");
             espManager.clear(target);
             if (buffManager != null) {
                 buffManager.removeBuffs(target);
             }
         } else {
-            player.sendMessage("§cKhông thể đuổi người chơi này.");
+            send(player,"§cKhông thể đuổi người chơi này.");
         }
     }
 
     private void handleWar(Player player, String[] args) {
         Clan own = clanManager.getClan(player);
         if (own == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         if (!clanManager.isOwner(player, own)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể quản lý chiến tranh.");
+            send(player,"§cChỉ chủ clan mới có thể quản lý chiến tranh.");
             return;
         }
         if (args.length < 2) {
@@ -345,27 +387,27 @@ public class ClanCommand implements CommandExecutor {
         }
         Clan targetClan = clanManager.getClan(args[1]);
         if (targetClan == null) {
-            player.sendMessage("§cKhông tìm thấy clan §e" + args[1] + "§c.");
+            send(player,"§cKhông tìm thấy clan §e" + args[1] + "§c.");
             return;
         }
         if (targetClan == own) {
-            player.sendMessage("§cKhông thể bật war với chính clan của bạn.");
+            send(player,"§cKhông thể bật war với chính clan của bạn.");
             return;
         }
         boolean was = warManager.isWarEnabled(own, targetClan);
         warManager.setWarEnabled(own, targetClan, !was);
-        player.sendMessage(was ? "§aĐã tắt chiến tranh với clan §e" + targetClan.getName() + "§a." : "§cĐã bật chiến tranh với clan §e" + targetClan.getName() + "§c.");
+        send(player,was ? "§aĐã tắt chiến tranh với clan §e" + targetClan.getName() + "§a." : "§cĐã bật chiến tranh với clan §e" + targetClan.getName() + "§c.");
         espManager.updateAll();
     }
 
     private void handleWarManager(Player player) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể mở quản lý chiến tranh.");
+            send(player,"§cChỉ chủ clan mới có thể mở quản lý chiến tranh.");
             return;
         }
         ClanWarGUI.open(player, clan, clanManager, warManager, 0);
@@ -374,7 +416,7 @@ public class ClanCommand implements CommandExecutor {
     private void handleInfo(Player player) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào!");
+            send(player,"§cBạn không ở trong clan nào!");
             return;
         }
         ClanInfoGUI.open(player, clan, 0);
@@ -383,14 +425,14 @@ public class ClanCommand implements CommandExecutor {
     private void handleUpgrade(Player player) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào!");
+            send(player,"§cBạn không ở trong clan nào!");
             return;
         }
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể nâng cấp!");
+            send(player,"§cChỉ chủ clan mới có thể nâng cấp!");
             return;
         }
-        ClanUpgradeGUI.open(player, clan, configManager, pointManager);
+        ClanUpgradeGUI.open(player, clan, configManager, pointManager, moneyPluginRef);
     }
 
     private void handleList(Player player) {
@@ -401,52 +443,52 @@ public class ClanCommand implements CommandExecutor {
     private void handleTransfer(Player player, String[] args) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
         // Kiểm tra phân quyền: chỉ owner mới có thể transfer
         if (!clanManager.isOwner(player, clan)) {
-            player.sendMessage("§cChỉ chủ clan mới có thể chuyển quyền sở hữu.");
+            send(player,"§cChỉ chủ clan mới có thể chuyển quyền sở hữu.");
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan transfer <người chơi>");
+            send(player,"§cCú pháp: §e/clan transfer <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null || !target.isOnline()) {
-            player.sendMessage("§cNgười chơi §e" + args[1] + " §ckhông online hoặc không tồn tại.");
+            send(player,"§cNgười chơi §e" + args[1] + " §ckhông online hoặc không tồn tại.");
             return;
         }
 
         if (!clan.hasMember(target.getUniqueId())) {
-            player.sendMessage("§cNgười chơi này không phải thành viên của clan.");
+            send(player,"§cNgười chơi này không phải thành viên của clan.");
             return;
         }
 
         if (clanManager.requestTransferOwnership(clan, target.getUniqueId())) {
-            player.sendMessage("§aĐã gửi yêu cầu chuyển quyền sở hữu clan cho §e" + target.getName() + "§a!");
-            target.sendMessage("§6" + player.getName() + " §eđã gửi yêu cầu chuyển quyền sở hữu clan §6" + clan.getName() + " §echo bạn!");
-            target.sendMessage("§7Dùng §e/clan taccept §7để chấp nhận hoặc §e/clan tdeny §7để từ chối.");
+            send(player,"§aĐã gửi yêu cầu chuyển quyền sở hữu clan cho §e" + target.getName() + "§a!");
+            send(target,"§6" + player.getName() + " §eđã gửi yêu cầu chuyển quyền sở hữu clan §6" + clan.getName() + " §echo bạn!");
+            send(target,"§7Dùng §e/clan taccept §7để chấp nhận hoặc §e/clan tdeny §7để từ chối.");
             // Phát sound ping để thông báo
             target.playSound(target.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
         } else {
-            player.sendMessage("§cKhông thể gửi yêu cầu chuyển quyền sở hữu. Vui lòng thử lại sau.");
+            send(player,"§cKhông thể gửi yêu cầu chuyển quyền sở hữu. Vui lòng thử lại sau.");
         }
     }
 
     private void handleTransferAccept(Player player) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
 
         UUID pendingTransfer = clan.getPendingTransferTo();
         if (pendingTransfer == null || !pendingTransfer.equals(player.getUniqueId())) {
-            player.sendMessage("§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
+            send(player,"§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
             return;
         }
 
@@ -455,34 +497,35 @@ public class ClanCommand implements CommandExecutor {
         Player oldOwner = Bukkit.getPlayer(oldOwnerUuid);
         
         if (clanManager.acceptTransferOwnership(clan)) {
-            player.sendMessage("§aBạn đã trở thành chủ clan mới của §e" + clan.getName() + "§a!");
+            clanManager.updatePlayerListName(player);
             if (oldOwner != null && oldOwner.isOnline()) {
-                oldOwner.sendMessage("§a" + player.getName() + " §eđã chấp nhận yêu cầu chuyển quyền sở hữu clan!");
+                clanManager.updatePlayerListName(oldOwner);
+                send(oldOwner,"§a" + player.getName() + " §eđã chấp nhận yêu cầu chuyển quyền sở hữu clan!");
             }
-            
+            send(player,"§aBạn đã trở thành chủ clan mới của §e" + clan.getName() + "§a!");
             // Thông báo cho tất cả members (loại trừ old owner và new owner)
             // Create a copy to avoid ConcurrentModificationException
             for (UUID memberUuid : new java.util.HashSet<>(clan.getMembers())) {
                 Player member = Bukkit.getPlayer(memberUuid);
                 if (member != null && member.isOnline() && !memberUuid.equals(oldOwnerUuid) && !memberUuid.equals(player.getUniqueId())) {
-                    member.sendMessage("§6" + player.getName() + " §eđã trở thành chủ clan mới!");
+                    send(member,"§6" + player.getName() + " §eđã trở thành chủ clan mới!");
                 }
             }
         } else {
-            player.sendMessage("§cKhông thể chuyển quyền sở hữu. Vui lòng thử lại sau.");
+            send(player,"§cKhông thể chuyển quyền sở hữu. Vui lòng thử lại sau.");
         }
     }
 
     private void handleTransferDeny(Player player) {
         Clan clan = clanManager.getClan(player);
         if (clan == null) {
-            player.sendMessage("§cBạn không ở trong clan nào.");
+            send(player,"§cBạn không ở trong clan nào.");
             return;
         }
 
         UUID pendingTransfer = clan.getPendingTransferTo();
         if (pendingTransfer == null) {
-            player.sendMessage("§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
+            send(player,"§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
             return;
         }
 
@@ -492,7 +535,7 @@ public class ClanCommand implements CommandExecutor {
 
         // Allow both recipient and owner to cancel the transfer
         if (!isRecipient && !isOwner) {
-            player.sendMessage("§cBạn không có quyền hủy yêu cầu chuyển quyền sở hữu này.");
+            send(player,"§cBạn không có quyền hủy yêu cầu chuyển quyền sở hữu này.");
             return;
         }
 
@@ -501,70 +544,64 @@ public class ClanCommand implements CommandExecutor {
         
         if (isRecipient) {
             // Recipient denied
-            player.sendMessage("§cBạn đã từ chối yêu cầu chuyển quyền sở hữu clan.");
+            send(player,"§cBạn đã từ chối yêu cầu chuyển quyền sở hữu clan.");
             Player oldOwner = Bukkit.getPlayer(clan.getOwner());
             if (oldOwner != null && oldOwner.isOnline()) {
-                oldOwner.sendMessage("§c" + player.getName() + " §eđã từ chối yêu cầu chuyển quyền sở hữu clan.");
+                send(oldOwner,"§c" + player.getName() + " §eđã từ chối yêu cầu chuyển quyền sở hữu clan.");
             }
         } else if (isOwner) {
             // Owner cancelled their own request
-            player.sendMessage("§cBạn đã hủy yêu cầu chuyển quyền sở hữu clan.");
+            send(player,"§cBạn đã hủy yêu cầu chuyển quyền sở hữu clan.");
             Player recipient = Bukkit.getPlayer(pendingTransfer);
             if (recipient != null && recipient.isOnline()) {
-                recipient.sendMessage("§c" + player.getName() + " §eđã hủy yêu cầu chuyển quyền sở hữu clan.");
+                send(recipient,"§c" + player.getName() + " §eđã hủy yêu cầu chuyển quyền sở hữu clan.");
             }
         }
     }
 
     private void showHelpPage(Player player, int page) {
         java.util.List<String> commands = new java.util.ArrayList<>();
-        commands.add("§e/clan create <tên> §7- Tạo clan mới");
+        commands.add("§e/clan §7hoặc §e/clan menu §7- Mở menu clan (theo vai trò)");
+        commands.add("§e/clan create <tên> §7- Tạo clan mới (tốn 100 Đá Quý Shard)");
         commands.add("§e/clan join <tên> §7- Gửi yêu cầu tham gia clan");
         commands.add("§e/clan invite <người chơi> §7- Mời người chơi vào clan");
         commands.add("§e/clan accept §7- Chấp nhận lời mời");
         commands.add("§e/clan deny §7- Từ chối lời mời");
-        commands.add("§e/clan raccept <người chơi> §7- Chấp nhận yêu cầu tham gia");
-        commands.add("§e/clan rdeny <người chơi> §7- Từ chối yêu cầu tham gia");
-        commands.add("§e/clan requests §7- Xem danh sách yêu cầu");
+        commands.add("§e/clan raccept <người chơi> §7- Chấp nhận yêu cầu tham gia (chủ clan)");
+        commands.add("§e/clan rdeny <người chơi> §7- Từ chối yêu cầu tham gia (chủ clan)");
+        commands.add("§e/clan requests §7- Xem danh sách yêu cầu (chủ clan)");
         commands.add("§e/clan leave §7- Rời khỏi clan");
-        commands.add("§e/clan kick <người chơi> §7- Đuổi thành viên");
-        commands.add("§e/clan war §7- Mở quản lý chiến tranh (bật/tắt war)");
-        commands.add("§e/clan war <clan> §7- Bật/tắt war với clan (chủ clan)");
-        commands.add("§e/clan warmanager §7- Mở GUI quản lý chiến tranh");
+        commands.add("§e/clan kick <người chơi> §7- Đuổi thành viên (chủ clan)");
+        commands.add("§e/clan war §7- Bật/tắt war với clan (chủ clan)");
+        commands.add("§e/clan warmanager §7- Mở GUI quản lý chiến tranh (chủ clan)");
         commands.add("§e/clan info §7- Xem thông tin clan");
         commands.add("§e/clan upgrade §7- Nâng cấp clan (chủ clan)");
         commands.add("§e/clan list §7- Xem danh sách clans");
         commands.add("§e/clan transfer <người chơi> §7- Chuyển quyền sở hữu (chủ clan)");
         commands.add("§e/clan chat <tin nhắn> §7- Chat trong clan");
 
-        int commandsPerPage = 6;
-        int totalPages = (int) Math.ceil((double) commands.size() / commandsPerPage);
-        
+        int commandsPerPage = 8;
+        int totalPages = Math.max(1, (int) Math.ceil((double) commands.size() / commandsPerPage));
         if (page < 0) page = 0;
         if (page >= totalPages) page = totalPages - 1;
 
-        player.sendMessage("§6=== Clan Commands §7(Trang " + (page + 1) + "/" + totalPages + ") ===");
-        
         int startIndex = page * commandsPerPage;
         int endIndex = Math.min(startIndex + commandsPerPage, commands.size());
-        
+
+        player.sendMessage("");
+        player.sendMessage("§6§l=== Clan §e§lTrang " + (page + 1) + "/" + totalPages + " §6§l===");
         for (int i = startIndex; i < endIndex; i++) {
             player.sendMessage(commands.get(i));
         }
-        
         if (totalPages > 1) {
-            if (page < totalPages - 1) {
-                player.sendMessage("§7Dùng §e/clan help " + (page + 2) + " §7để xem trang tiếp theo.");
-            }
-            if (page > 0) {
-                player.sendMessage("§7Dùng §e/clan help " + page + " §7để xem trang trước.");
-            }
+            player.sendMessage("§7Dùng §e/clan help " + (page + 2) + " §7để xem trang tiếp.");
         }
+        player.sendMessage("");
     }
 
     private void handleChat(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/clan chat <tin nhắn>");
+            send(player,"§cCú pháp: §e/clan chat <tin nhắn>");
             return;
         }
 

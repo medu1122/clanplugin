@@ -63,6 +63,36 @@ public class SQLiteStorage {
                 );
             """);
 
+            // Kho cờ: inventory 54 slot (chỉ đá quý), mỗi slot lưu số lượng
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS flag_inventory (
+                    flag_id INTEGER NOT NULL,
+                    slot INTEGER NOT NULL,
+                    amount INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (flag_id, slot),
+                    FOREIGN KEY (flag_id) REFERENCES clan_flags(id) ON DELETE CASCADE
+                );
+            """);
+
+            // Quyền mở kho cờ (rút/đặt đá quý)
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS flag_permissions (
+                    flag_id INTEGER NOT NULL,
+                    uuid TEXT NOT NULL,
+                    can_open INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (flag_id, uuid),
+                    FOREIGN KEY (flag_id) REFERENCES clan_flags(id) ON DELETE CASCADE
+                );
+            """);
+
+            // Số cờ đã lấy từ pool (level 5+ mỗi level 1 cờ)
+            stmt.executeUpdate("""
+                CREATE TABLE IF NOT EXISTS clan_flag_pool (
+                    clan_name TEXT PRIMARY KEY,
+                    taken_count INTEGER NOT NULL DEFAULT 0
+                );
+            """);
+
             migrateClanPointsColumn(connection);
         }
     }

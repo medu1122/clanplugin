@@ -20,6 +20,9 @@ public class ConfigManager {
     private int maxLevel = 5;
     private final Map<Integer, LevelConfig> levelConfigs = new HashMap<>();
 
+    // Kho Cờ: đá quý
+    private Material gemMaterial = Material.EMERALD;
+
     public ConfigManager(JavaPlugin plugin) {
         this.plugin = plugin;
         loadConfig();
@@ -67,6 +70,9 @@ public class ConfigManager {
                 plugin.getLogger().warning("clan-points.sellable-items is not a valid configuration section!");
             }
         }
+
+        gemMaterial = Material.matchMaterial(config.getString("flag-storage.gem-material", "EMERALD"));
+        if (gemMaterial == null || !gemMaterial.isItem()) gemMaterial = Material.EMERALD;
 
         // Load level configs (0 = không giới hạn level)
         maxLevel = config.getInt("clan-levels.max-level", 0);
@@ -116,6 +122,10 @@ public class ConfigManager {
 
     public boolean isLevelUnlimited() {
         return maxLevel <= 0;
+    }
+
+    public Material getGemMaterial() {
+        return gemMaterial;
     }
 
     /**

@@ -137,6 +137,20 @@ public class ClanManager {
         return playerClan.get(player.getUniqueId());
     }
 
+    /**
+     * Cập nhật tên hiển thị trên tab list: ưu tiên tên clan ở đầu [ClanName] PlayerName.
+     */
+    public void updatePlayerListName(Player player) {
+        if (player == null || !player.isOnline()) return;
+        Clan clan = getClan(player);
+        String name = player.getName();
+        if (clan != null) {
+            player.setPlayerListName("§6[" + clan.getName() + "] §e" + name);
+        } else {
+            player.setPlayerListName("§7" + name);
+        }
+    }
+
     public boolean isInClan(Player player) {
         return getClan(player) != null;
     }

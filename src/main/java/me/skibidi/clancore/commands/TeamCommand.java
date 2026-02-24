@@ -6,6 +6,7 @@ import me.skibidi.clancore.gui.TeamInfoGUI;
 import me.skibidi.clancore.gui.TeamListGUI;
 import me.skibidi.clancore.team.TeamManager;
 import me.skibidi.clancore.team.model.Team;
+import me.skibidi.clancore.util.MessageUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -14,7 +15,12 @@ import org.bukkit.entity.Player;
 
 import java.util.UUID;
 
+/** Phản hồi lệnh chỉ Action Bar (không chat). */
 public class TeamCommand implements CommandExecutor {
+
+    private static void send(Player p, String msg) {
+        if (p != null && p.isOnline()) MessageUtil.sendActionBar(p, msg);
+    }
 
     private final TeamManager teamManager;
     private final TeamChatManager chatManager;
@@ -67,8 +73,8 @@ public class TeamCommand implements CommandExecutor {
             case "tdeny" -> handleTransferDeny(player);
             case "chat", "ch" -> handleChat(player, args);
             default -> {
-                player.sendMessage("§cLệnh không hợp lệ. Gõ §e/team §cđể xem danh sách lệnh.");
-                player.sendMessage("§7Hoặc dùng §e/team help <số trang> §7để xem các trang khác.");
+                send(player,"§cLệnh không hợp lệ. Gõ §e/team §cđể xem danh sách lệnh.");
+                send(player,"§7Hoặc dùng §e/team help <số trang> §7để xem các trang khác.");
             }
         }
 
@@ -78,15 +84,15 @@ public class TeamCommand implements CommandExecutor {
     private void handleCreate(Player player) {
         // Kiểm tra phân quyền: player không được ở trong team nào mới có thể tạo team mới
         if (teamManager.isInTeam(player)) {
-            player.sendMessage("§cBạn đã ở trong một team rồi. Dùng §e/team leave §cđể rời team hiện tại.");
+            send(player,"§cBạn đã ở trong một team rồi. Dùng §e/team leave §cđể rời team hiện tại.");
             return;
         }
         if (teamManager.createTeam(player)) {
-            player.sendMessage("§aĐã tạo team thành công!");
+            send(player,"§aĐã tạo team thành công!");
             // Update ESP cho player
             espManager.updateFor(player);
         } else {
-            player.sendMessage("§cKhông thể tạo team. Vui lòng thử lại sau.");
+            send(player,"§cKhông thể tạo team. Vui lòng thử lại sau.");
         }
     }
 
@@ -94,61 +100,61 @@ public class TeamCommand implements CommandExecutor {
         // Kiểm tra phân quyền: chỉ leader của team mới có thể invite
         Team team = teamManager.getTeam(player);
         if (team == null) {
-            player.sendMessage("§cBạn không ở trong team nào.");
+            send(player,"§cBạn không ở trong team nào.");
             return;
         }
         
         if (!team.getLeader().equals(player.getUniqueId())) {
-            player.sendMessage("§cChỉ leader của team mới có thể mời thành viên.");
+            send(player,"§cChỉ leader của team mới có thể mời thành viên.");
             return;
         }
         
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/team invite <người chơi>");
+            send(player,"§cCú pháp: §e/team invite <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null) {
-            player.sendMessage("§cKhông tìm thấy người chơi §e" + args[1] + "§c.");
+            send(player,"§cKhông tìm thấy người chơi §e" + args[1] + "§c.");
             return;
         }
 
         if (teamManager.invite(player, target)) {
-            player.sendMessage("§aĐã mời §e" + target.getName() + " §avào team.");
-            target.sendMessage("§6Bạn đã được mời tham gia team. Dùng §e/team accept §6để tham gia.");
+            send(player,"§aĐã mời §e" + target.getName() + " §avào team.");
+            send(target,"§6Bạn đã được mời tham gia team. Dùng §e/team accept §6để tham gia.");
             // Phát sound ping để thông báo
             target.playSound(target.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
         } else {
-            player.sendMessage("§cKhông thể mời người chơi này. Có thể bạn không phải leader hoặc người chơi đã ở trong team.");
+            send(player,"§cKhông thể mời người chơi này. Có thể bạn không phải leader hoặc người chơi đã ở trong team.");
         }
     }
 
     private void handleAccept(Player player) {
         Team teamBefore = teamManager.getTeam(player);
         if (teamManager.accept(player)) {
-            player.sendMessage("§aBạn đã tham gia team thành công!");
+            send(player,"§aBạn đã tham gia team thành công!");
             // Update ESP cho player và tất cả members của team
             Team team = teamManager.getTeam(player);
             if (team != null) {
                 espManager.updateTeamMembers(team);
             }
         } else {
-            player.sendMessage("§cBạn không có lời mời nào đang chờ xử lý.");
+            send(player,"§cBạn không có lời mời nào đang chờ xử lý.");
         }
     }
 
     private void handleLeave(Player player) {
         Team team = teamManager.getTeam(player);
         if (teamManager.leave(player)) {
-            player.sendMessage("§cBạn đã rời khỏi team.");
+            send(player,"§cBạn đã rời khỏi team.");
             // Update ESP cho player (đã rời team) và các members còn lại
             espManager.updateFor(player);
             if (team != null) {
                 espManager.updateTeamMembers(team);
             }
         } else {
-            player.sendMessage("§cBạn không ở trong team nào.");
+            send(player,"§cBạn không ở trong team nào.");
         }
     }
 
@@ -156,37 +162,37 @@ public class TeamCommand implements CommandExecutor {
         // Kiểm tra phân quyền: chỉ leader của team mới có thể kick
         Team team = teamManager.getTeam(player);
         if (team == null) {
-            player.sendMessage("§cBạn không ở trong team nào.");
+            send(player,"§cBạn không ở trong team nào.");
             return;
         }
         
         if (!team.getLeader().equals(player.getUniqueId())) {
-            player.sendMessage("§cChỉ leader của team mới có thể đuổi thành viên.");
+            send(player,"§cChỉ leader của team mới có thể đuổi thành viên.");
             return;
         }
         
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/team kick <người chơi>");
+            send(player,"§cCú pháp: §e/team kick <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null) {
-            player.sendMessage("§cKhông tìm thấy người chơi §e" + args[1] + "§c.");
+            send(player,"§cKhông tìm thấy người chơi §e" + args[1] + "§c.");
             return;
         }
 
         Team currentTeam = teamManager.getTeam(player);
         if (teamManager.kick(player, target)) {
-            player.sendMessage("§aĐã đuổi §e" + target.getName() + " §akhỏi team.");
-            target.sendMessage("§cBạn đã bị đuổi khỏi team.");
+            send(player,"§aĐã đuổi §e" + target.getName() + " §akhỏi team.");
+            send(target,"§cBạn đã bị đuổi khỏi team.");
             // Update ESP cho target (đã bị kick) và các members còn lại
             espManager.updateFor(target);
             if (currentTeam != null) {
                 espManager.updateTeamMembers(currentTeam);
             }
         } else {
-            player.sendMessage("§cKhông thể đuổi người chơi này. Có thể bạn không phải leader hoặc người chơi không ở trong team của bạn.");
+            send(player,"§cKhông thể đuổi người chơi này. Có thể bạn không phải leader hoặc người chơi không ở trong team của bạn.");
         }
     }
 
@@ -194,32 +200,32 @@ public class TeamCommand implements CommandExecutor {
         // Kiểm tra phân quyền: chỉ leader của team mới có thể disband
         Team team = teamManager.getTeam(player);
         if (team == null) {
-            player.sendMessage("§cBạn không ở trong team nào.");
+            send(player,"§cBạn không ở trong team nào.");
             return;
         }
         
         if (!team.getLeader().equals(player.getUniqueId())) {
-            player.sendMessage("§cChỉ leader của team mới có thể giải tán team.");
+            send(player,"§cChỉ leader của team mới có thể giải tán team.");
             return;
         }
         
         Team currentTeam = teamManager.getTeam(player);
         if (teamManager.disband(player)) {
-            player.sendMessage("§cĐã giải tán team.");
+            send(player,"§cĐã giải tán team.");
             // Update ESP cho tất cả members (team đã disband)
             if (currentTeam != null) {
                 espManager.updateTeamMembers(currentTeam);
             }
             espManager.updateFor(player);
         } else {
-            player.sendMessage("§cKhông thể giải tán team.");
+            send(player,"§cKhông thể giải tán team.");
         }
     }
 
     private void handleInfo(Player player) {
         Team team = teamManager.getTeam(player);
         if (team == null) {
-            player.sendMessage("§cBạn không ở trong team nào!");
+            send(player,"§cBạn không ở trong team nào!");
             return;
         }
         TeamInfoGUI.open(player, team, 0);
@@ -233,52 +239,52 @@ public class TeamCommand implements CommandExecutor {
     private void handleTransfer(Player player, String[] args) {
         Team team = teamManager.getTeam(player);
         if (team == null) {
-            player.sendMessage("§cBạn không ở trong team nào.");
+            send(player,"§cBạn không ở trong team nào.");
             return;
         }
         // Kiểm tra phân quyền: chỉ leader mới có thể transfer
         if (!team.getLeader().equals(player.getUniqueId())) {
-            player.sendMessage("§cChỉ leader mới có thể chuyển quyền sở hữu.");
+            send(player,"§cChỉ leader mới có thể chuyển quyền sở hữu.");
             return;
         }
 
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/team transfer <người chơi>");
+            send(player,"§cCú pháp: §e/team transfer <người chơi>");
             return;
         }
 
         Player target = Bukkit.getPlayerExact(args[1]);
         if (target == null || !target.isOnline()) {
-            player.sendMessage("§cNgười chơi §e" + args[1] + " §ckhông online hoặc không tồn tại.");
+            send(player,"§cNgười chơi §e" + args[1] + " §ckhông online hoặc không tồn tại.");
             return;
         }
 
         if (!team.isMember(target.getUniqueId())) {
-            player.sendMessage("§cNgười chơi này không phải thành viên của team.");
+            send(player,"§cNgười chơi này không phải thành viên của team.");
             return;
         }
 
         if (teamManager.requestTransferOwnership(team, target.getUniqueId())) {
-            player.sendMessage("§aĐã gửi yêu cầu chuyển quyền sở hữu team cho §e" + target.getName() + "§a!");
-            target.sendMessage("§6" + player.getName() + " §eđã gửi yêu cầu chuyển quyền leader team cho bạn!");
-            target.sendMessage("§7Dùng §e/team taccept §7để chấp nhận hoặc §e/team tdeny §7để từ chối.");
+            send(player,"§aĐã gửi yêu cầu chuyển quyền sở hữu team cho §e" + target.getName() + "§a!");
+            send(target,"§6" + player.getName() + " §eđã gửi yêu cầu chuyển quyền leader team cho bạn!");
+            send(target,"§7Dùng §e/team taccept §7để chấp nhận hoặc §e/team tdeny §7để từ chối.");
             // Phát sound ping để thông báo
             target.playSound(target.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_PLING, 1.0f, 1.5f);
         } else {
-            player.sendMessage("§cKhông thể gửi yêu cầu chuyển quyền sở hữu. Vui lòng thử lại sau.");
+            send(player,"§cKhông thể gửi yêu cầu chuyển quyền sở hữu. Vui lòng thử lại sau.");
         }
     }
 
     private void handleTransferAccept(Player player) {
         Team team = teamManager.getTeam(player);
         if (team == null) {
-            player.sendMessage("§cBạn không ở trong team nào.");
+            send(player,"§cBạn không ở trong team nào.");
             return;
         }
 
         UUID pendingTransfer = team.getPendingTransferTo();
         if (pendingTransfer == null || !pendingTransfer.equals(player.getUniqueId())) {
-            player.sendMessage("§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
+            send(player,"§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
             return;
         }
 
@@ -287,27 +293,27 @@ public class TeamCommand implements CommandExecutor {
         Player oldLeader = Bukkit.getPlayer(oldLeaderUuid);
         
         if (teamManager.acceptTransferOwnership(team)) {
-            player.sendMessage("§aBạn đã trở thành leader mới của team!");
+            send(player,"§aBạn đã trở thành leader mới của team!");
             if (oldLeader != null && oldLeader.isOnline()) {
-                oldLeader.sendMessage("§a" + player.getName() + " §eđã chấp nhận yêu cầu chuyển quyền leader team!");
+                send(oldLeader,"§a" + player.getName() + " §eđã chấp nhận yêu cầu chuyển quyền leader team!");
             }
             // Update ESP cho tất cả members (leader đã thay đổi)
             espManager.updateTeamMembers(team);
         } else {
-            player.sendMessage("§cKhông thể chuyển quyền sở hữu. Vui lòng thử lại sau.");
+            send(player,"§cKhông thể chuyển quyền sở hữu. Vui lòng thử lại sau.");
         }
     }
 
     private void handleTransferDeny(Player player) {
         Team team = teamManager.getTeam(player);
         if (team == null) {
-            player.sendMessage("§cBạn không ở trong team nào.");
+            send(player,"§cBạn không ở trong team nào.");
             return;
         }
 
         UUID pendingTransfer = team.getPendingTransferTo();
         if (pendingTransfer == null) {
-            player.sendMessage("§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
+            send(player,"§cBạn không có yêu cầu chuyển quyền sở hữu nào.");
             return;
         }
 
@@ -317,7 +323,7 @@ public class TeamCommand implements CommandExecutor {
 
         // Allow both recipient and leader to cancel the transfer
         if (!isRecipient && !isLeader) {
-            player.sendMessage("§cBạn không có quyền hủy yêu cầu chuyển quyền sở hữu này.");
+            send(player,"§cBạn không có quyền hủy yêu cầu chuyển quyền sở hữu này.");
             return;
         }
 
@@ -326,17 +332,17 @@ public class TeamCommand implements CommandExecutor {
         
         if (isRecipient) {
             // Recipient denied
-            player.sendMessage("§cBạn đã từ chối yêu cầu chuyển quyền sở hữu team.");
+            send(player,"§cBạn đã từ chối yêu cầu chuyển quyền sở hữu team.");
             Player oldLeader = Bukkit.getPlayer(team.getLeader());
             if (oldLeader != null && oldLeader.isOnline()) {
-                oldLeader.sendMessage("§c" + player.getName() + " §eđã từ chối yêu cầu chuyển quyền leader team.");
+                send(oldLeader,"§c" + player.getName() + " §eđã từ chối yêu cầu chuyển quyền leader team.");
             }
         } else if (isLeader) {
             // Leader cancelled their own request
-            player.sendMessage("§cBạn đã hủy yêu cầu chuyển quyền sở hữu team.");
+            send(player,"§cBạn đã hủy yêu cầu chuyển quyền sở hữu team.");
             Player recipient = Bukkit.getPlayer(pendingTransfer);
             if (recipient != null && recipient.isOnline()) {
-                recipient.sendMessage("§c" + player.getName() + " §eđã hủy yêu cầu chuyển quyền leader team.");
+                send(recipient,"§c" + player.getName() + " §eđã hủy yêu cầu chuyển quyền leader team.");
             }
         }
     }
@@ -362,28 +368,13 @@ public class TeamCommand implements CommandExecutor {
         if (page < 0) page = 0;
         if (page >= totalPages) page = totalPages - 1;
 
-        player.sendMessage("§6=== Team Commands §7(Trang " + (page + 1) + "/" + totalPages + ") ===");
-        
-        int startIndex = page * commandsPerPage;
-        int endIndex = Math.min(startIndex + commandsPerPage, commands.size());
-        
-        for (int i = startIndex; i < endIndex; i++) {
-            player.sendMessage(commands.get(i));
-        }
-        
-        if (totalPages > 1) {
-            if (page < totalPages - 1) {
-                player.sendMessage("§7Dùng §e/team help " + (page + 2) + " §7để xem trang tiếp theo.");
-            }
-            if (page > 0) {
-                player.sendMessage("§7Dùng §e/team help " + page + " §7để xem trang trước.");
-            }
-        }
+        String nav = totalPages > 1 ? " §7- §e/team help <số>" : "";
+        send(player, "§6Team §7Trang " + (page + 1) + "/" + totalPages + nav);
     }
 
     private void handleChat(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage("§cCú pháp: §e/team chat <tin nhắn>");
+            send(player,"§cCú pháp: §e/team chat <tin nhắn>");
             return;
         }
 

@@ -2,9 +2,14 @@ package me.skibidi.clancore.flag;
 
 import me.skibidi.clancore.clan.ClanManager;
 import me.skibidi.clancore.clan.model.Clan;
+import me.skibidi.clancore.config.ConfigManager;
 import me.skibidi.clancore.flag.model.ClanFlag;
+import me.skibidi.clancore.storage.repository.ClanFlagPoolRepository;
 import me.skibidi.clancore.storage.repository.ClanFlagRepository;
+import me.skibidi.clancore.storage.repository.FlagInventoryRepository;
+import me.skibidi.clancore.storage.repository.FlagPermissionsRepository;
 import org.bukkit.*;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
@@ -19,20 +24,38 @@ public class FlagManager {
 
     public static final int TERRITORY_RADIUS = 16;
     public static final int POLE_HEIGHT = 5;
+    /** Raid: cướp 5% đá, tối đa 300. Khi tổng đá < 300 không cướp thêm. */
+    public static final int RAID_PERCENT = 5;
+    public static final int RAID_MAX_GEMS = 300;
+    /** Máu cờ = 5 lần máu người chơi (20), tránh spam tin nhắn khi bị tấn công. */
+    public static final int FLAG_MAX_HP = 5 * 20;
+    public static final int FLAG_DAMAGE_PER_HIT = 20;
     private static final String FLAG_LORE_PREFIX = "§6Cờ Clan §7- §e";
 
     private final ClanManager clanManager;
     private final ClanFlagRepository flagRepository;
+    private final FlagInventoryRepository inventoryRepository;
+    private final FlagPermissionsRepository permissionsRepository;
+    private final ClanFlagPoolRepository poolRepository;
+    private final ConfigManager configManager;
     private final Map<Integer, ClanFlag> flagsById = new ConcurrentHashMap<>();
     private final List<ClanFlag> flagsList = Collections.synchronizedList(new ArrayList<>());
     /** Player UUID -> set of flag IDs they are currently inside (for message on enter). */
     private final Map<UUID, Set<Integer>> playerInFlagIds = new ConcurrentHashMap<>();
     /** Player UUID -> last time we applied damage (ms). */
     private final Map<UUID, Long> lastDamageTime = new ConcurrentHashMap<>();
+    /** flagId -> máu hiện tại (mặc định FLAG_MAX_HP). */
+    private final Map<Integer, Integer> flagHealth = new ConcurrentHashMap<>();
 
-    public FlagManager(ClanManager clanManager, ClanFlagRepository flagRepository) {
+    public FlagManager(ClanManager clanManager, ClanFlagRepository flagRepository,
+                      FlagInventoryRepository inventoryRepository, FlagPermissionsRepository permissionsRepository,
+                      ClanFlagPoolRepository poolRepository, ConfigManager configManager) {
         this.clanManager = clanManager;
         this.flagRepository = flagRepository;
+        this.inventoryRepository = inventoryRepository;
+        this.permissionsRepository = permissionsRepository;
+        this.poolRepository = poolRepository;
+        this.configManager = configManager;
         load();
     }
 
@@ -56,6 +79,24 @@ public class FlagManager {
 
     public ClanFlag getFlagById(int id) {
         return flagsById.get(id);
+    }
+
+    /** Máu hiện tại của cờ (mặc định full). */
+    public int getFlagHealth(int flagId) {
+        return flagHealth.getOrDefault(flagId, FLAG_MAX_HP);
+    }
+
+    /** Gây sát thương lên cờ, trả về máu còn lại sau khi trừ. */
+    public int damageFlag(int flagId, int amount) {
+        int current = getFlagHealth(flagId);
+        int next = Math.max(0, current - amount);
+        flagHealth.put(flagId, next);
+        return next;
+    }
+
+    /** Reset máu cờ về đầy (sau khi raid xong, cờ hồi). */
+    public void resetFlagHealth(int flagId) {
+        flagHealth.put(flagId, FLAG_MAX_HP);
     }
 
     /**
@@ -128,6 +169,111 @@ public class FlagManager {
         return null;
     }
 
+    /** Trả về cờ nếu block (bx, by, bz) là một block của cột cờ (pole/banner). */
+    public ClanFlag getFlagByBlock(World world, int bx, int by, int bz) {
+        if (world == null) return null;
+        String wn = world.getName();
+        for (ClanFlag f : flagsList) {
+            if (!f.getWorldName().equals(wn)) continue;
+            if (f.getX() != bx || f.getZ() != bz) continue;
+            if (by >= f.getY() && by <= f.getY() + POLE_HEIGHT + 1) return f;
+        }
+        return null;
+    }
+
+    public Material getGemMaterial() {
+        return configManager != null ? configManager.getGemMaterial() : Material.EMERALD;
+    }
+
+    public long getTotalGems(int flagId) {
+        try {
+            Map<Integer, Integer> inv = inventoryRepository.load(flagId);
+            long total = 0;
+            for (Integer amt : inv.values()) total += amt != null ? amt : 0;
+            return total;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
+    public Map<Integer, Integer> loadInventory(int flagId) {
+        try {
+            return inventoryRepository.load(flagId);
+        } catch (SQLException e) {
+            e.printStackTrace();
+            Map<Integer, Integer> empty = new HashMap<>();
+            for (int i = 0; i < 54; i++) empty.put(i, 0);
+            return empty;
+        }
+    }
+
+    public void saveInventory(int flagId, Map<Integer, Integer> slots) {
+        try {
+            inventoryRepository.save(flagId, slots);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean canOpenStorage(int flagId, UUID uuid) {
+        ClanFlag f = flagsById.get(flagId);
+        if (f == null) return false;
+        Clan clan = clanManager.getClan(f.getClanName());
+        if (clan == null) return false;
+        if (clan.getOwner().equals(uuid)) return true;
+        try {
+            return permissionsRepository.loadCanOpen(flagId).contains(uuid);
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    public void setCanOpenStorage(int flagId, UUID uuid, boolean canOpen) {
+        try {
+            permissionsRepository.setCanOpen(flagId, uuid, canOpen);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public Set<UUID> getCanOpenList(int flagId) {
+        try {
+            return permissionsRepository.loadCanOpen(flagId);
+        } catch (SQLException e) {
+            return Set.of();
+        }
+    }
+
+    /** Số cờ có thể lấy từ pool (level 5 = 1, level 6 = 2, ...). */
+    public int getAvailableFlagsToTake(Clan clan) {
+        if (clan == null || clan.getLevel() < 5) return 0;
+        try {
+            int taken = poolRepository.getTakenCount(clan.getName());
+            int earned = clan.getLevel() - 4;
+            return Math.max(0, earned - taken);
+        } catch (SQLException e) {
+            return 0;
+        }
+    }
+
+    /** Lấy 1 cờ từ pool, trả về true nếu thành công. */
+    public boolean takeFlagFromPool(Clan clan, Player player) {
+        if (getAvailableFlagsToTake(clan) <= 0) return false;
+        try {
+            poolRepository.incrementTaken(clan.getName());
+            org.bukkit.inventory.ItemStack flag = createFlagItem(clan.getName(), "RED");
+            if (player.getInventory().firstEmpty() == -1)
+                player.getWorld().dropItemNaturally(player.getLocation(), flag);
+            else
+                player.getInventory().addItem(flag);
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     public boolean isInTerritory(Player player, String clanName) {
         Location loc = player.getLocation();
         ClanFlag f = getFlagAt(loc.getWorld(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ());
@@ -196,7 +342,8 @@ public class FlagManager {
     }
 
     /**
-     * Trả về true nếu nên gây damage (player đang trong vùng cờ không phải clan mình, và đã qua 2 giây).
+     * Trả về true nếu nên gây damage (player đang trong vùng cờ địch, không phải vùng giao thoa).
+     * Vùng giao thoa: cờ đồng minh đã cắm trong vòng cờ địch → không gây damage.
      */
     public boolean shouldDamageAndTick(Player player) {
         Set<Integer> inFlags = playerInFlagIds.getOrDefault(player.getUniqueId(), Set.of());
@@ -205,8 +352,9 @@ public class FlagManager {
         String myClan = clan != null ? clan.getName() : null;
         for (Integer id : inFlags) {
             ClanFlag f = flagsById.get(id);
-            if (f != null && !f.getClanName().equals(myClan))
-                return true;
+            if (f == null || f.getClanName().equals(myClan)) continue;
+            if (myClan != null && hasAllyFlagInRadius(f, myClan)) continue; // vùng giao thoa, không damage
+            return true;
         }
         return false;
     }
@@ -245,5 +393,93 @@ public class FlagManager {
         World w = player.getWorld();
         w.spawnParticle(Particle.DUST, loc.getX(), loc.getY() + 1, loc.getZ(), 3, 0.3, 0.3, 0.3, 0,
             new Particle.DustOptions(Color.BLUE, 1.2f));
+    }
+
+    /** Khôi phục cột cờ (sau raid thường – cờ hồi). */
+    public void restoreFlagBlocks(ClanFlag flag) {
+        if (flag == null) return;
+        World world = Bukkit.getWorld(flag.getWorldName());
+        if (world == null) return;
+        buildPole(world, flag.getX(), flag.getY(), flag.getZ(), flag.getBannerColor());
+    }
+
+    /** Xóa toàn bộ block cột cờ (set AIR). */
+    public void removeFlagBlocks(ClanFlag flag) {
+        if (flag == null) return;
+        World world = Bukkit.getWorld(flag.getWorldName());
+        if (world == null) return;
+        int x = flag.getX(), y = flag.getY(), z = flag.getZ();
+        for (int i = 0; i <= POLE_HEIGHT; i++) {
+            world.getBlockAt(x, y + i, z).setType(Material.AIR);
+        }
+        world.getBlockAt(x, y + POLE_HEIGHT + 1, z).setType(Material.AIR);
+    }
+
+    /**
+     * Trừ đá từ kho cờ, trả về số đá đã trừ (có thể ít hơn amount nếu không đủ).
+     */
+    public int removeGemsFromInventory(int flagId, int amount) {
+        Map<Integer, Integer> inv = loadInventory(flagId);
+        int left = amount;
+        for (int slot = 0; slot < 54 && left > 0; slot++) {
+            int amt = inv.getOrDefault(slot, 0);
+            if (amt <= 0) continue;
+            int take = Math.min(amt, left);
+            inv.put(slot, amt - take);
+            left -= take;
+        }
+        saveInventory(flagId, inv);
+        return amount - left;
+    }
+
+    /**
+     * Có cờ của clan allyClanName nằm trong bán kính TERRITORY_RADIUS của cờ enemyFlag (điều kiện war phá hoàn toàn).
+     */
+    public boolean hasAllyFlagInRadius(ClanFlag enemyFlag, String allyClanName) {
+        if (enemyFlag == null || allyClanName == null) return false;
+        int radiusSq = TERRITORY_RADIUS * TERRITORY_RADIUS;
+        String wn = enemyFlag.getWorldName();
+        int ex = enemyFlag.getX(), ey = enemyFlag.getY(), ez = enemyFlag.getZ();
+        for (ClanFlag f : flagsList) {
+            if (!f.getClanName().equals(allyClanName) || !f.getWorldName().equals(wn)) continue;
+            if (f.getId() == enemyFlag.getId()) continue;
+            double dx = f.getX() - ex, dy = f.getY() - ey, dz = f.getZ() - ez;
+            if (dx * dx + dy * dy + dz * dz <= radiusSq) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Phá hủy cờ hoàn toàn: drop toàn bộ đá tại vị trí, xóa DB và block. Gọi sau khi đã kiểm tra war + ally flag trong vùng.
+     */
+    public void destroyFlagCompletely(ClanFlag flag, Location dropAt) {
+        if (flag == null || dropAt == null || dropAt.getWorld() == null) return;
+        int flagId = flag.getId();
+        Map<Integer, Integer> inv = loadInventory(flagId);
+        Material gem = getGemMaterial();
+        for (Map.Entry<Integer, Integer> e : inv.entrySet()) {
+            int amt = e.getValue() == null ? 0 : e.getValue();
+            if (amt <= 0) continue;
+            int stackSize = Math.min(amt, gem.getMaxStackSize());
+            ItemStack stack = new ItemStack(gem, stackSize);
+            dropAt.getWorld().dropItemNaturally(dropAt, stack);
+            amt -= stackSize;
+            while (amt > 0) {
+                int next = Math.min(amt, gem.getMaxStackSize());
+                dropAt.getWorld().dropItemNaturally(dropAt, new ItemStack(gem, next));
+                amt -= next;
+            }
+        }
+        try {
+            inventoryRepository.deleteByFlagId(flagId);
+            permissionsRepository.deleteByFlagId(flagId);
+            flagRepository.delete(flagId);
+        } catch (java.sql.SQLException ex) {
+            ex.printStackTrace();
+        }
+        flagsById.remove(flagId);
+        flagsList.removeIf(f -> f.getId() == flagId);
+        flagHealth.remove(flagId);
+        removeFlagBlocks(flag);
     }
 }

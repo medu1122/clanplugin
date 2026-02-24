@@ -17,8 +17,10 @@ public class ClanUpgradeGUI {
     private static final int UPGRADE_SLOT = 22; // Center slot để bỏ item
     private static final int UPGRADE_BUTTON_SLOT = 31; // Button để upgrade
 
-    public static void open(Player player, Clan clan, ConfigManager configManager, ClanPointManager pointManager) {
+    public static void open(Player player, Clan clan, ConfigManager configManager, ClanPointManager pointManager, Object moneyPluginRef) {
         Inventory inv = org.bukkit.Bukkit.createInventory(null, 54, "§6Nâng Cấp Clan");
+        boolean useShard = (moneyPluginRef != null && pointManager.hasMoneyPlugin());
+        int cost = configManager.getUpgradeCost(clan.getLevel());
 
         // Info panel ở top
         ItemStack infoItem = new ItemStack(Material.EXPERIENCE_BOTTLE);
@@ -28,9 +30,13 @@ public class ClanUpgradeGUI {
             List<String> lore = new ArrayList<>();
             lore.add("§7Cấp độ hiện tại: §e" + clan.getLevel());
             lore.add("");
-            int cost = configManager.getUpgradeCost(clan.getLevel());
-            lore.add("§7Yêu cầu nâng cấp (Đá quý): §e" + cost);
-            lore.add("§7(Đá quý sẽ được tích hợp sau)");
+            lore.add("§7Yêu cầu nâng cấp: §e" + cost + " §5Đá Quý Shard");
+            if (useShard) {
+                int have = pointManager.countShardsInInventory(player);
+                lore.add("§7Bạn đang có: §e" + have + " §7Shard");
+            } else {
+                lore.add("§7(Cần cài §6MoneyPlugin§7 để dùng Đá Quý Shard)");
+            }
             if (clan.getLevel() >= 5) {
                 lore.add("");
                 lore.add("§a§lĐÃ MỞ BASE (CỜ)");
@@ -55,14 +61,18 @@ public class ClanUpgradeGUI {
             }
         }
 
-        // Ô đá quý (sắp ra mắt)
-        ItemStack gemSlot = new ItemStack(Material.EMERALD);
+        // Ô Đá Quý Shard (MoneyPlugin)
+        ItemStack gemSlot = new ItemStack(useShard ? Material.AMETHYST_SHARD : Material.EMERALD);
         ItemMeta gemMeta = gemSlot.getItemMeta();
         if (gemMeta != null) {
-            gemMeta.setDisplayName("§6§lĐÁ QUÝ");
+            gemMeta.setDisplayName("§5§lĐÁ QUÝ SHARD");
             List<String> lore = new ArrayList<>();
-            lore.add("§7Nâng cấp clan sẽ dùng §6Đá quý§7.");
-            lore.add("§7Tính năng đang được cập nhật.");
+            if (useShard) {
+                lore.add("§7Nâng cấp clan dùng §5Đá Quý Shard§7 (MoneyPlugin).");
+                lore.add("§7Để đủ Shard trong túi rồi click nút §aNâng cấp §7bên dưới.");
+            } else {
+                lore.add("§7Cần cài §6MoneyPlugin§7 để dùng Đá Quý Shard.");
+            }
             gemMeta.setLore(lore);
             gemSlot.setItemMeta(gemMeta);
         }
@@ -98,15 +108,18 @@ public class ClanUpgradeGUI {
         }
         inv.setItem(40, benefits);
 
-        // Upgrade button (đá quý - sắp ra mắt)
-        int cost = configManager.getUpgradeCost(clan.getLevel());
-        ItemStack upgradeButton = new ItemStack(Material.EMERALD_BLOCK);
+        // Upgrade button (trừ Đá Quý Shard trong túi)
+        ItemStack upgradeButton = new ItemStack(useShard ? Material.AMETHYST_BLOCK : Material.EMERALD_BLOCK);
         ItemMeta upgradeButtonMeta = upgradeButton.getItemMeta();
         if (upgradeButtonMeta != null) {
-            upgradeButtonMeta.setDisplayName("§6§lNÂNG CẤP CLAN (ĐÁ QUÝ)");
+            upgradeButtonMeta.setDisplayName("§5§lNÂNG CẤP CLAN (ĐÁ QUÝ SHARD)");
             List<String> lore = new ArrayList<>();
-            lore.add("§7Chi phí: §e" + cost + " §6Đá quý");
-            lore.add("§7Tính năng đang được cập nhật.");
+            lore.add("§7Chi phí: §e" + cost + " §5Đá Quý Shard");
+            if (useShard) {
+                lore.add("§7Click để mở màn hình xác nhận trước khi trừ Shard.");
+            } else {
+                lore.add("§7Cần cài §6MoneyPlugin§7.");
+            }
             upgradeButtonMeta.setLore(lore);
             upgradeButton.setItemMeta(upgradeButtonMeta);
         }

@@ -28,7 +28,7 @@ public class ClanTabCompleter implements TabCompleter {
         if (args.length == 1) {
             // Subcommands với alias ngắn
             List<String> subcommands = Arrays.asList(
-                    "create", "c", "join", "j", "invite", "i", "accept", "a", "deny", "d",
+                    "menu", "m", "create", "c", "join", "j", "invite", "i", "accept", "a", "deny", "d",
                     "raccept", "ra", "rdeny", "rd", "requests", "req", "leave", "l", "kick", "k",
                     "war", "w", "warmanager", "wm", "info", "in", "upgrade", "up", "list", "li", "transfer", "t",
                     "taccept", "ta", "tdeny", "td", "chat", "ch", "help", "h"

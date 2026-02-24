@@ -2,6 +2,7 @@ name: ClanCore
 version: '1.0-SNAPSHOT'
 main: me.skibidi.clancore.ClanCorePlugin
 api-version: '1.21'
+softdepend: [moneyPlugin]
 commands:
   clan:
     description: Clan main command

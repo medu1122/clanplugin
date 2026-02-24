@@ -4,10 +4,17 @@ import me.skibidi.clancore.clan.ClanManager;
 import me.skibidi.clancore.clan.ClanPointManager;
 import me.skibidi.clancore.clan.model.Clan;
 import me.skibidi.clancore.config.ConfigManager;
+import me.skibidi.clancore.esp.EspManager;
+import me.skibidi.clancore.flag.FlagManager;
+import me.skibidi.clancore.gui.ClanCreateConfirmGUI;
 import me.skibidi.clancore.gui.ClanInfoGUI;
 import me.skibidi.clancore.gui.ClanListGUI;
+import me.skibidi.clancore.gui.ClanMenuGUI;
+import me.skibidi.clancore.gui.ClanUpgradeConfirmGUI;
 import me.skibidi.clancore.gui.ClanUpgradeGUI;
 import me.skibidi.clancore.gui.ClanWarGUI;
+import me.skibidi.clancore.gui.FlagPoolGUI;
+import me.skibidi.clancore.util.MessageUtil;
 import me.skibidi.clancore.gui.SellItemsGUI;
 import me.skibidi.clancore.gui.TeamInfoGUI;
 import me.skibidi.clancore.gui.TeamListGUI;
@@ -35,19 +42,32 @@ public class GUIListener implements Listener {
     private final ConfigManager configManager;
     private final WarManager warManager;
     private final Plugin plugin;
+    private final Object moneyPluginRef;
+    private final FlagManager flagManager;
     private final Map<UUID, Integer> clanInfoPages = new HashMap<>();
     private final Map<UUID, Integer> teamInfoPages = new HashMap<>();
     private final Map<UUID, Integer> clanListPages = new HashMap<>();
     private final Map<UUID, Integer> teamListPages = new HashMap<>();
     private final Map<UUID, Integer> clanWarPages = new HashMap<>();
+    /** Chờ xác nhận nâng cấp: UUID -> (clanName, cost) */
+    private final Map<UUID, PendingUpgrade> pendingUpgrades = new HashMap<>();
+    private final Map<UUID, String> pendingCreates = new HashMap<>();
+    private final EspManager espManager;
 
-    public GUIListener(ClanManager clanManager, TeamManager teamManager, ClanPointManager pointManager, ConfigManager configManager, WarManager warManager, Plugin plugin) {
+    public GUIListener(ClanManager clanManager, TeamManager teamManager, ClanPointManager pointManager, ConfigManager configManager, WarManager warManager, Plugin plugin, Object moneyPluginRef, EspManager espManager, FlagManager flagManager) {
         this.clanManager = clanManager;
         this.teamManager = teamManager;
         this.pointManager = pointManager;
         this.configManager = configManager;
         this.warManager = warManager;
         this.plugin = plugin;
+        this.moneyPluginRef = moneyPluginRef;
+        this.espManager = espManager;
+        this.flagManager = flagManager;
+    }
+
+    public void addPendingCreate(UUID playerId, String clanName) {
+        pendingCreates.put(playerId, clanName);
     }
 
     @EventHandler
@@ -57,8 +77,68 @@ public class GUIListener implements Listener {
         String title = event.getView().getTitle();
         ItemStack clicked = event.getCurrentItem();
 
-        // Clan Info GUI - cancel all clicks including empty slots
-        if (title.startsWith("§6Clan: §e")) {
+        // Clan Menu GUI (/clan không args)
+        if (title.equals(ClanMenuGUI.TITLE)) {
+            event.setCancelled(true);
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+            Clan clan = clanManager.getClan(player);
+            boolean isOwner = clan != null && clanManager.isOwner(player, clan);
+
+            if (event.getSlot() == ClanMenuGUI.SLOT_CLOSE) {
+                player.closeInventory();
+                return;
+            }
+            if (event.getSlot() == ClanMenuGUI.SLOT_LIST) {
+                ClanListGUI.open(player, clanManager, 0);
+                return;
+            }
+            if (clan == null) {
+                if (event.getSlot() == ClanMenuGUI.SLOT_CREATE) {
+                    player.sendMessage("§7Dùng §e/clan create <tên> §7để tạo clan (tốn 100 Đá Quý Shard).");
+                    player.closeInventory();
+                }
+                return;
+            }
+            if (event.getSlot() == ClanMenuGUI.SLOT_INFO) {
+                ClanInfoGUI.open(player, clan, 0);
+                return;
+            }
+            if (isOwner && event.getSlot() == ClanMenuGUI.SLOT_UPGRADE) {
+                ClanUpgradeGUI.open(player, clan, configManager, pointManager, moneyPluginRef);
+                return;
+            }
+            if (isOwner && event.getSlot() == ClanMenuGUI.SLOT_WAR) {
+                ClanWarGUI.open(player, clan, clanManager, warManager, 0);
+                return;
+            }
+            if (isOwner && event.getSlot() == ClanMenuGUI.SLOT_FLAG_POOL && flagManager != null) {
+                FlagPoolGUI.open(player, clan, flagManager);
+                return;
+            }
+            return;
+        }
+
+        // Kho Cờ (Flag Pool) GUI - cancel all, lấy cờ / đóng
+        if (title.startsWith(FlagPoolGUI.TITLE_PREFIX)) {
+            event.setCancelled(true);
+            Clan clan = clanManager.getClan(player);
+            if (clan == null || flagManager == null) return;
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+            if (event.getSlot() == FlagPoolGUI.getCloseSlot()) {
+                player.closeInventory();
+                return;
+            }
+            if (event.getSlot() == FlagPoolGUI.getTakeSlot() && flagManager.getAvailableFlagsToTake(clan) > 0) {
+                if (flagManager.takeFlagFromPool(clan, player)) {
+                    MessageUtil.sendFeedback(player, "§aĐã lấy 1 cờ từ kho.");
+                    FlagPoolGUI.open(player, clan, flagManager);
+                }
+            }
+            return;
+        }
+
+        // Clan Info GUI - cancel all clicks (title dùng TITLE_PREFIX viết hoa)
+        if (title.startsWith(ClanInfoGUI.TITLE_PREFIX)) {
             event.setCancelled(true);
             
             // Early return if clicking empty slot (no action needed)
@@ -146,12 +226,20 @@ public class GUIListener implements Listener {
                 return;
             }
 
-            if (event.getSlot() == 31) { // Upgrade button
+            if (event.getSlot() == 31) { // Upgrade button -> mở UI xác nhận trước khi trừ Shard
                 event.setCancelled(true);
-                if (pointManager.upgradeClan(player)) {
-                    // Refresh GUI
-                    ClanUpgradeGUI.open(player, clan, configManager, pointManager);
+                if (!pointManager.hasMoneyPlugin()) {
+                    player.sendMessage("§eNâng cấp clan cần §6MoneyPlugin§e (Đá Quý Shard).");
+                    return;
                 }
+                int cost = configManager.getUpgradeCost(clan.getLevel());
+                int have = pointManager.countShardsInInventory(player);
+                if (have < cost) {
+                    player.sendMessage("§cBạn cần §e" + cost + " §cĐá Quý Shard. Hiện có: §e" + have);
+                    return;
+                }
+                pendingUpgrades.put(player.getUniqueId(), new PendingUpgrade(clan.getName(), cost));
+                ClanUpgradeConfirmGUI.open(player, clan.getName(), clan.getLevel(), clan.getLevel() + 1, cost);
                 return;
             }
 
@@ -163,6 +251,73 @@ public class GUIListener implements Listener {
 
             // Block other slots
             event.setCancelled(true);
+        }
+
+        // Clan Upgrade Confirm GUI (xác nhận dùng Shard)
+        if (title.equals(ClanUpgradeConfirmGUI.TITLE)) {
+            event.setCancelled(true);
+            PendingUpgrade pending = pendingUpgrades.get(player.getUniqueId());
+            if (pending == null) {
+                player.closeInventory();
+                return;
+            }
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+            if (ClanUpgradeConfirmGUI.isConfirmSlot(event.getSlot())) {
+                pendingUpgrades.remove(player.getUniqueId());
+                if (pointManager.upgradeClan(player)) {
+                    Clan clan = clanManager.getClan(player);
+                    if (clan != null) ClanUpgradeGUI.open(player, clan, configManager, pointManager, moneyPluginRef);
+                }
+                return;
+            }
+            if (ClanUpgradeConfirmGUI.isCancelSlot(event.getSlot())) {
+                pendingUpgrades.remove(player.getUniqueId());
+                Clan clan = clanManager.getClan(player);
+                if (clan != null) ClanUpgradeGUI.open(player, clan, configManager, pointManager, moneyPluginRef);
+                else player.closeInventory();
+            }
+            return;
+        }
+
+        // Clan Create Confirm GUI (xác nhận dùng Shard để tạo clan)
+        if (title.equals(ClanCreateConfirmGUI.TITLE)) {
+            event.setCancelled(true);
+            String clanName = pendingCreates.get(player.getUniqueId());
+            if (clanName == null) {
+                player.closeInventory();
+                return;
+            }
+            if (clicked == null || clicked.getType() == Material.AIR) return;
+            if (ClanCreateConfirmGUI.isConfirmSlot(event.getSlot())) {
+                pendingCreates.remove(player.getUniqueId());
+                int cost = ClanCreateConfirmGUI.CREATE_CLAN_SHARD_COST;
+                if (pointManager.countShardsInInventory(player) < cost) {
+                    MessageUtil.sendFeedback(player, "§cKhông đủ §e" + cost + " §5Đá Quý Shard§c.");
+                    player.closeInventory();
+                    return;
+                }
+                if (!pointManager.removeShardsFromInventory(player, cost)) {
+                    MessageUtil.sendFeedback(player, "§cKhông thể trừ Shard.");
+                    player.closeInventory();
+                    return;
+                }
+                if (clanManager.createClan(clanName, player)) {
+                    clanManager.updatePlayerListName(player);
+                    MessageUtil.sendFeedback(player, "§aĐã tạo clan §e" + clanName + "§a thành công!");
+                    espManager.updateFor(player);
+                } else {
+                    MessageUtil.sendFeedback(player, "§cKhông thể tạo clan. Hoàn lại Shard sau.");
+                    // Có thể hoàn lại 100 shard bằng cách give item - tạm bỏ qua
+                }
+                player.closeInventory();
+                return;
+            }
+            if (ClanCreateConfirmGUI.isCancelSlot(event.getSlot())) {
+                pendingCreates.remove(player.getUniqueId());
+                MessageUtil.sendFeedback(player, "§7Đã hủy tạo clan.");
+                player.closeInventory();
+            }
+            return;
         }
 
         // Clan War Manager GUI
@@ -255,7 +410,7 @@ public class GUIListener implements Listener {
 
             if (event.getSlot() == 45) { // Back button
                 event.setCancelled(true);
-                ClanUpgradeGUI.open(player, clan, configManager, pointManager);
+                ClanUpgradeGUI.open(player, clan, configManager, pointManager, moneyPluginRef);
                 return;
             }
 
@@ -382,6 +537,22 @@ public class GUIListener implements Listener {
             clanListPages.remove(uuid);
             teamListPages.remove(uuid);
             clanWarPages.remove(uuid);
+            if (event.getView().getTitle().equals(ClanUpgradeConfirmGUI.TITLE)) {
+                pendingUpgrades.remove(uuid);
+            }
+            if (event.getView().getTitle().equals(ClanCreateConfirmGUI.TITLE)) {
+                pendingCreates.remove(uuid);
+            }
+        }
+    }
+
+    private static final class PendingUpgrade {
+        final String clanName;
+        final int cost;
+
+        PendingUpgrade(String clanName, int cost) {
+            this.clanName = clanName;
+            this.cost = cost;
         }
     }
 }

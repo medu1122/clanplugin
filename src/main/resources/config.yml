@@ -1,5 +1,9 @@
 # ClanCore Configuration
 
+# Kho Cờ: vật phẩm đá quý (chỉ loại này được bỏ vào cờ)
+flag-storage:
+  gem-material: EMERALD   # Vật phẩm đại diện đá quý (sẽ đổi sau nếu có item riêng)
+
 # Nâng cấp clan dùng Đá quý (sẽ tích hợp sau). Clan points đã bỏ.
 clan-points:
   # Chi phí Đá quý để upgrade (từ level 5 trở đi dùng chung cost level 5)
